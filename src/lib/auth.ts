@@ -28,7 +28,20 @@ export const auth = betterAuth({
   // A calendar can live on a Google account with a different email than the todone login.
   account: { accountLinking: { allowDifferentEmails: true } },
   // ponytail: no email service yet, so invitations are shared as a link the inviter copies.
-  plugins: [organization(), nextCookies()],
+  plugins: [
+    organization({
+      organizationHooks: {
+        // A team's lists go with it (foreign keys); its integration secrets and links must go too.
+        afterDeleteOrganization: async ({ organization: o }) => {
+          const ws = `o:${o.id}`;
+          await db.query(`delete from calendar_share where workspace = $1`, [ws]);
+          await db.query(`delete from sync_map where workspace = $1`, [ws]);
+          await db.query(`delete from workspace where id = $1`, [ws]);
+        },
+      },
+    }),
+    nextCookies(),
+  ],
 });
 
 export const hasGithub = !!github;
