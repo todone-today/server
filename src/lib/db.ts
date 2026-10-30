@@ -17,6 +17,8 @@ create table if not exists list (
   check (("userId" is null) <> ("organizationId" is null))
 );
 alter table list add column if not exists kind text not null default 'list' check (kind in ('list', 'ideas'));
+-- Order in the sidebar once someone drags lists around; lists without one come first, newest first.
+alter table list add column if not exists position integer;
 create index if not exists list_user on list ("userId");
 create index if not exists list_org on list ("organizationId");
 -- Integration settings per workspace: 'u:<user id>' or 'o:<organization id>'.

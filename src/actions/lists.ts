@@ -7,7 +7,15 @@ import { notifyDiscord } from "@/lib/notify";
 import { autoSync } from "@/lib/sync-all";
 import { type List, type Task, validName, validTasks } from "@/lib/tasks";
 
-type Row = { id: string; name: string; tasks: List["tasks"]; version: number; updatedAt: Date; kind: string };
+type Row = {
+  id: string;
+  name: string;
+  tasks: List["tasks"];
+  version: number;
+  updatedAt: Date;
+  kind: string;
+  position: number | null;
+};
 const toList = (r: Row): List => ({
   id: r.id,
   name: r.name,
@@ -15,8 +23,9 @@ const toList = (r: Row): List => ({
   version: r.version,
   updated: +r.updatedAt,
   ...(r.kind === "ideas" ? { kind: "ideas" } : {}),
+  ...(r.position !== null ? { position: r.position } : {}),
 });
-const COLS = `id, name, tasks, version, "updatedAt", kind`;
+const COLS = `id, name, tasks, version, "updatedAt", kind, position`;
 // The lists of the active workspace: the user's own, or the active organization's.
 export async function fetchLists(): Promise<List[]> {
   const { user, org, workspace } = await who();
@@ -68,4 +77,15 @@ export async function saveList(
 export async function deleteList(id: string): Promise<void> {
   const { user } = await who();
   await db.query(`delete from list where id = $2 and ${MINE}`, [user, id]);
+}
+
+// Sidebar order after a drag: each list gets its index. Only lists the user may touch are changed.
+export async function reorderLists(ids: unknown): Promise<void> {
+  const { user } = await who();
+  if (!Array.isArray(ids) || ids.length > 500 || !ids.every((x) => typeof x === "string")) throw new Error("Invalid order");
+  await db.query(
+    `update list set position = x.i from unnest($2::text[]) with ordinality as x(id, i)
+     where list.id = x.id and ${MINE}`,
+    [user, ids],
+  );
 }
