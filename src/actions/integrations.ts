@@ -132,3 +132,15 @@ export async function syncNow(): Promise<string> {
   const { workspace } = await who();
   return (await syncWorkspace(workspace)) || "Nothing to sync yet.";
 }
+
+// The token for sharing the calendar: the existing one, or a new one if the workspace has none yet.
+// Sharing exposes dated tasks, so only those who manage integrations can turn it on.
+export async function shareCalendar(): Promise<{ token: string } | { error: string }> {
+  const w = await who();
+  const s = await settings(w.workspace);
+  if (s.icsToken) return { token: s.icsToken };
+  if (!w.manager) return { error: "Ask a team owner or admin to turn on calendar sharing." };
+  const icsToken = randomBytes(24).toString("base64url");
+  await save(w.workspace, { icsToken });
+  return { token: icsToken };
+}
