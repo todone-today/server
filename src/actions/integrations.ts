@@ -5,6 +5,7 @@ import { who } from "@/lib/access";
 import { hasGoogle } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createCalendar } from "@/lib/google";
+import { type CalView, VIEWS } from "@/lib/calendar";
 import { validDiscordWebhook } from "@/lib/integrations";
 import { notionId, prepareDatabase } from "@/lib/notion";
 import { syncWorkspace } from "@/lib/sync-all";
@@ -133,14 +134,34 @@ export async function syncNow(): Promise<string> {
   return (await syncWorkspace(workspace)) || "Nothing to sync yet.";
 }
 
-// The token for sharing the calendar: the existing one, or a new one if the workspace has none yet.
-// Sharing exposes dated tasks, so only those who manage integrations can turn it on.
-export async function shareCalendar(): Promise<{ token: string } | { error: string }> {
+// Shares one calendar view: a new secret link that shows that day, week, month or year and nothing else.
+// Sharing exposes dated tasks, so in a team only owners and admins can do it.
+export async function shareCalendar(view: unknown, at: unknown): Promise<{ token: string } | { error: string }> {
   const w = await who();
-  const s = await settings(w.workspace);
-  if (s.icsToken) return { token: s.icsToken };
-  if (!w.manager) return { error: "Ask a team owner or admin to turn on calendar sharing." };
-  const icsToken = randomBytes(24).toString("base64url");
-  await save(w.workspace, { icsToken });
-  return { token: icsToken };
+  if (!w.manager) return { error: "Ask a team owner or admin to share the calendar." };
+  if (!VIEWS.includes(view as CalView) || typeof at !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(at))
+    return { error: "That view can't be shared." };
+  const token = randomBytes(24).toString("base64url");
+  await db.query(`insert into calendar_share (token, workspace, view, at) values ($1, $2, $3, $4)`, [
+    token,
+    w.workspace,
+    view,
+    at,
+  ]);
+  return { token };
+}
+
+export async function listShares(): Promise<{ token: string; view: CalView; at: string }[]> {
+  const w = await who();
+  if (!w.manager) return [];
+  const { rows } = await db.query<{ token: string; view: CalView; at: string }>(
+    `select token, view, at from calendar_share where workspace = $1 order by "createdAt" desc`,
+    [w.workspace],
+  );
+  return rows;
+}
+
+export async function stopShare(token: string): Promise<void> {
+  const { workspace } = await manager();
+  await db.query(`delete from calendar_share where token = $1 and workspace = $2`, [token, workspace]);
 }

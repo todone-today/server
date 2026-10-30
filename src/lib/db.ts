@@ -37,6 +37,15 @@ alter table workspace add column if not exists "googleSyncToken" text;
 alter table workspace add column if not exists "syncToken" text unique;
 alter table workspace add column if not exists "syncedAt" timestamptz;
 alter table workspace add column if not exists "syncError" text;
+-- Shared calendar views: each link shows one view (day, week, month or year) around one date, nothing else.
+create table if not exists calendar_share (
+  token text primary key,
+  workspace text not null,
+  view text not null check (view in ('day', 'week', 'month', 'year')),
+  at text not null,
+  "createdAt" timestamptz not null default now()
+);
+create index if not exists calendar_share_workspace on calendar_share (workspace);
 -- Which remote item (Notion page, Google event) mirrors which task, and the task's fields as of the last sync.
 create table if not exists sync_map (
   workspace text not null,
