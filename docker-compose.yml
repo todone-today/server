@@ -1,0 +1,38 @@
+# Runs the web app and its Postgres: `docker compose up`, then open http://localhost:3000
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: todone
+      POSTGRES_PASSWORD: todone
+      POSTGRES_DB: todone
+    ports:
+      - "54329:5432" # for `npm run dev` outside Docker
+    volumes:
+      - pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "todone"]
+      interval: 2s
+      retries: 30
+
+  web:
+    build: ./web
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://todone:todone@db:5432/todone
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pg:
+  data:
