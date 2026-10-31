@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import { MINE, who } from "@/lib/access";
 import { db } from "@/lib/db";
+import { demoLists } from "@/lib/demo";
 import { notifyDiscord } from "@/lib/notify";
 import { autoSync } from "@/lib/sync-all";
 import { type List, type Task, validName, validTasks } from "@/lib/tasks";
@@ -88,4 +89,25 @@ export async function reorderLists(ids: unknown): Promise<void> {
      where list.id = x.id and ${MINE}`,
     [user, ids],
   );
+}
+
+// A person's first visit: once per account, fill an empty personal workspace with the demo lists and say
+// to show the tour. `today` is the browser's date, so the demo's dates are the person's own.
+export async function startOnboarding(today: unknown): Promise<boolean> {
+  const { user } = await who();
+  const day = typeof today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(today) ? today : new Date().toISOString().slice(0, 10);
+  const first = await db.query(
+    `insert into workspace (id, onboarded) values ($1, true)
+     on conflict (id) do update set onboarded = true where workspace.onboarded = false returning id`,
+    [`u:${user}`],
+  );
+  if (!first.rowCount) return false;
+  const has = await db.query(`select 1 from list where "userId" = $1 limit 1`, [user]);
+  if (!has.rowCount)
+    for (const [i, l] of demoLists(day).entries())
+      await db.query(
+        `insert into list (id, "userId", name, tasks, kind, position) values ($1, $2, $3, $4, $5, $6)`,
+        [crypto.randomUUID(), user, l.name, JSON.stringify(l.tasks), l.kind ?? "list", i + 1], // Welcome first
+      );
+  return true;
 }

@@ -37,6 +37,8 @@ alter table workspace add column if not exists "googleSyncToken" text;
 alter table workspace add column if not exists "syncToken" text unique;
 alter table workspace add column if not exists "syncedAt" timestamptz;
 alter table workspace add column if not exists "syncError" text;
+-- Set once a person's first visit has made the demo lists and offered the tour.
+alter table workspace add column if not exists onboarded boolean not null default false;
 -- Push notifications: one row per device that turned them on, and what was already sent (so nothing repeats).
 create table if not exists push_sub (
   endpoint text primary key,
