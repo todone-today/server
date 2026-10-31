@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { after } from "next/server";
 import { MINE, who } from "@/lib/access";
 import { db } from "@/lib/db";
@@ -136,4 +137,20 @@ export async function exportData(): Promise<Export> {
     spaces.get(key)!.lists.push({ name: r.name, ideas: r.kind === "ideas", tasks: r.tasks });
   }
   return { exportedAt: new Date().toISOString(), workspaces: [...spaces.values()] };
+}
+
+const KINDS = ["bug", "idea", "other"];
+
+export async function sendFeedback(kind: string, body: string, page: string) {
+  const { user } = await who();
+  const text = String(body).trim();
+  if (!KINDS.includes(kind) || !text || text.length > 5000) throw new Error("Bad feedback");
+  const agent = (await headers()).get("user-agent")?.slice(0, 300) ?? null;
+  await db.query(`insert into feedback ("userId", kind, body, page, agent) values ($1, $2, $3, $4, $5)`, [
+    user,
+    kind,
+    text,
+    String(page).slice(0, 300),
+    agent,
+  ]);
 }

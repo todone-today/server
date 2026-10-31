@@ -54,6 +54,16 @@ create table if not exists push_sent (
   "sentAt" timestamptz not null default now(),
   primary key ("userId", key)
 );
+-- What people send from "Send feedback": bugs, ideas, anything else. Read it straight from the database.
+create table if not exists feedback (
+  id bigserial primary key,
+  "userId" text not null references "user"(id) on delete cascade,
+  kind text not null,
+  body text not null,
+  page text,
+  agent text,
+  "createdAt" timestamptz not null default now()
+);
 -- Shared calendar views: each link shows one view (day, week, month or year) around one date, nothing else.
 create table if not exists calendar_share (
   token text primary key,
