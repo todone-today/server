@@ -1,13 +1,17 @@
-# Runs the web app and its Postgres: `docker compose up`, then open http://localhost:3000
+# Runs todone: Postgres, the web app, reminders, and (optionally) a Cloudflare Tunnel.
+#   docker compose up -d --build                 then open http://localhost:3000
+#   docker compose --profile tunnel up -d        also starts the tunnel (needs CLOUDFLARE_TUNNEL_TOKEN)
+# Settings come from the environment or a .env file next to this one; see web/.env.example.
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: todone
-      POSTGRES_PASSWORD: todone
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-todone}
       POSTGRES_DB: todone
     ports:
-      - "54329:5432" # for `npm run dev` outside Docker
+      - "127.0.0.1:54329:5432" # this machine only, for `npm run dev` outside Docker
     volumes:
       - pg:/var/lib/postgresql/data
     healthcheck:
@@ -17,10 +21,11 @@ services:
 
   web:
     build: ./web
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      DATABASE_URL: postgres://todone:todone@db:5432/todone
+      DATABASE_URL: postgres://todone:${POSTGRES_PASSWORD:-todone}@db:5432/todone
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
@@ -35,6 +40,35 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # Sends due push reminders: calls the app every 10 minutes (needs CRON_SECRET; does nothing without it).
+  reminders:
+    image: curlimages/curl:8.10.1
+    restart: unless-stopped
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          sleep 600
+          [ -n "$$CRON_SECRET" ] && curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://web:3000/api/cron/notify
+        done
+    depends_on:
+      - web
+
+  # The public address: a Cloudflare Tunnel to the app. Make a tunnel in Cloudflare Zero Trust whose
+  # public hostname points at http://web:3000, and set CLOUDFLARE_TUNNEL_TOKEN.
+  tunnel:
+    image: cloudflare/cloudflared:2024.10.1
+    restart: unless-stopped
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
 
 volumes:
   pg:

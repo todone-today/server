@@ -1,0 +1,63 @@
+# Drone on the Mac mini (Docker runner).
+# Every push and pull request: lint, test and build the web app.
+# A push to main, once that passes: rebuild and restart todone with Docker Compose on the Mac mini's
+# own Docker. That needs the host's Docker socket, so mark this repo "Trusted" in Drone's settings.
+# Secrets (Drone → repo → Settings → Secrets) become the app's settings; only better_auth_secret is
+# required. See web/.env.example for what each one does.
+kind: pipeline
+type: docker
+name: check
+
+trigger:
+  event: [push, pull_request]
+
+steps:
+  - name: web
+    image: node:24-alpine
+    commands:
+      - cd web
+      - npm ci
+      - npm run lint
+      - npm test
+      - npm run build
+
+---
+kind: pipeline
+type: docker
+name: deploy
+
+depends_on: [check]
+
+trigger:
+  branch: [main]
+  event: [push]
+
+steps:
+  - name: compose up
+    image: docker:27-cli
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+    environment:
+      BETTER_AUTH_SECRET: { from_secret: better_auth_secret }
+      BETTER_AUTH_URL: { from_secret: better_auth_url }
+      POSTGRES_PASSWORD: { from_secret: postgres_password }
+      VAPID_PUBLIC_KEY: { from_secret: vapid_public_key }
+      VAPID_PRIVATE_KEY: { from_secret: vapid_private_key }
+      CRON_SECRET: { from_secret: cron_secret }
+      GITHUB_CLIENT_ID: { from_secret: github_client_id }
+      GITHUB_CLIENT_SECRET: { from_secret: github_client_secret }
+      GOOGLE_CLIENT_ID: { from_secret: google_client_id }
+      GOOGLE_CLIENT_SECRET: { from_secret: google_client_secret }
+      CLOUDFLARE_TUNNEL_TOKEN: { from_secret: cloudflare_tunnel_token }
+    commands:
+      - test -n "$$BETTER_AUTH_SECRET" || { echo "Set the better_auth_secret secret in Drone first"; exit 1; }
+      # The same project name every time, so each deploy replaces the last and keeps its data volumes.
+      - docker compose -p todone $${CLOUDFLARE_TUNNEL_TOKEN:+--profile tunnel} up -d --build --remove-orphans
+      - docker compose -p todone ps
+      - docker image prune -f
+
+volumes:
+  - name: docker
+    host:
+      path: /var/run/docker.sock
