@@ -37,6 +37,21 @@ alter table workspace add column if not exists "googleSyncToken" text;
 alter table workspace add column if not exists "syncToken" text unique;
 alter table workspace add column if not exists "syncedAt" timestamptz;
 alter table workspace add column if not exists "syncError" text;
+-- Push notifications: one row per device that turned them on, and what was already sent (so nothing repeats).
+create table if not exists push_sub (
+  endpoint text primary key,
+  "userId" text not null references "user"(id) on delete cascade,
+  p256dh text not null,
+  auth text not null,
+  "timeZone" text not null default 'UTC',
+  "createdAt" timestamptz not null default now()
+);
+create table if not exists push_sent (
+  "userId" text not null references "user"(id) on delete cascade,
+  key text not null,
+  "sentAt" timestamptz not null default now(),
+  primary key ("userId", key)
+);
 -- Shared calendar views: each link shows one view (day, week, month or year) around one date, nothing else.
 create table if not exists calendar_share (
   token text primary key,
