@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { db } from "./db.ts";
@@ -24,6 +25,31 @@ const google =
 export const auth = betterAuth({
   database: db,
   emailAndPassword: { enabled: true, minPasswordLength: 8 },
+  user: {
+    deleteUser: {
+      enabled: true,
+      // A team someone else still uses needs an owner, so the only owner hands it over (or deletes it) first;
+      // teams with no one else in them go with the account.
+      beforeDelete: async (user) => {
+        const { rows } = await db.query<{ id: string; name: string; members: number; owners: number }>(
+          `select o.id, o.name,
+             (select count(*) from member x where x."organizationId" = o.id)::int as members,
+             (select count(*) from member x where x."organizationId" = o.id and x.role = 'owner')::int as owners
+           from organization o join member m on m."organizationId" = o.id
+           where m."userId" = $1 and m.role = 'owner'`,
+          [user.id],
+        );
+        const stuck = rows.find((o) => o.members > 1 && o.owners === 1);
+        if (stuck)
+          throw new APIError("BAD_REQUEST", {
+            message: `You're the only owner of “${stuck.name}”. Make someone else an owner or delete the team first.`,
+          });
+        for (const o of rows.filter((o) => o.members === 1)) await dropWorkspace(`o:${o.id}`, o.id);
+      },
+      // Lists, sessions, memberships and push devices go with the user row; these are keyed by workspace.
+      afterDelete: async (user) => dropWorkspace(`u:${user.id}`),
+    },
+  },
   socialProviders: { ...github, ...google },
   // A calendar can live on a Google account with a different email than the todone login.
   account: { accountLinking: { allowDifferentEmails: true } },
@@ -43,6 +69,13 @@ export const auth = betterAuth({
     nextCookies(),
   ],
 });
+
+async function dropWorkspace(ws: string, orgId?: string) {
+  await db.query(`delete from calendar_share where workspace = $1`, [ws]);
+  await db.query(`delete from sync_map where workspace = $1`, [ws]);
+  await db.query(`delete from workspace where id = $1`, [ws]);
+  if (orgId) await db.query(`delete from organization where id = $1`, [orgId]);
+}
 
 export const hasGithub = !!github;
 export const hasGoogle = !!google;

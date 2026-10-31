@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { MINE, who } from "@/lib/access";
 import { db } from "@/lib/db";
 import { demoLists } from "@/lib/demo";
+import type { Export } from "@/lib/export";
 import { notifyDiscord } from "@/lib/notify";
 import { autoSync } from "@/lib/sync-all";
 import { type List, type Task, validName, validTasks } from "@/lib/tasks";
@@ -110,4 +111,29 @@ export async function startOnboarding(today: unknown): Promise<boolean> {
         [crypto.randomUUID(), user, l.name, JSON.stringify(l.tasks), l.kind ?? "list", i + 1], // Welcome first
       );
   return true;
+}
+
+// Everything the signed-in person can see, for "Export everything": personal lists and every team's.
+export async function exportData(): Promise<Export> {
+  const { user } = await who();
+  const { rows } = await db.query<{
+    name: string;
+    tasks: List["tasks"];
+    kind: string;
+    org: string | null;
+    orgName: string | null;
+  }>(
+    `select l.name, l.tasks, l.kind, l."organizationId" as org, o.name as "orgName"
+     from list l left join organization o on o.id = l."organizationId"
+     where l."userId" = $1 or l."organizationId" in (select "organizationId" from member where "userId" = $1)
+     order by l."organizationId" nulls first, l.position nulls first, l."updatedAt" desc`,
+    [user],
+  );
+  const spaces = new Map<string, Export["workspaces"][number]>();
+  for (const r of rows) {
+    const key = r.org ?? "personal";
+    if (!spaces.has(key)) spaces.set(key, { name: r.orgName ?? "Personal", team: !!r.org, lists: [] });
+    spaces.get(key)!.lists.push({ name: r.name, ideas: r.kind === "ideas", tasks: r.tasks });
+  }
+  return { exportedAt: new Date().toISOString(), workspaces: [...spaces.values()] };
 }
