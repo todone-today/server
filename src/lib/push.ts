@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { db } from "./db";
+import { db } from "./db.ts";
 import { localNow, dueNotes } from "@todone/sdk/reminders";
 import type { Task } from "@todone/sdk/tasks";
 

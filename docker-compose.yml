@@ -1,7 +1,9 @@
-# Runs todone: Postgres, the web app, reminders, and (optionally) a Cloudflare Tunnel.
+# Runs todone: Postgres, the server, the web app, reminders, and (optionally) a Cloudflare Tunnel.
 #   docker compose up -d --build                 then open http://localhost:3000
 #   docker compose --profile tunnel up -d        also starts the tunnel (needs CLOUDFLARE_TUNNEL_TOKEN)
-# Settings come from the environment or a .env file next to this one; see clients/apps/web/.env.example.
+# Settings come from the environment or a .env file next to this one; see .env.example.
+# Images build from the repo root (..), since the server and the web app both use sdk/. Once they're
+# separate repos, point the contexts at their git URLs.
 services:
   db:
     image: postgres:17-alpine
@@ -11,7 +13,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-todone}
       POSTGRES_DB: todone
     ports:
-      - "127.0.0.1:54329:5432" # this machine only, for `npm run dev` outside Docker
+      - "127.0.0.1:54329:5432" # this machine only, for running the server outside Docker
     volumes:
       - pg:/var/lib/postgresql/data
     healthcheck:
@@ -19,16 +21,14 @@ services:
       interval: 2s
       retries: 30
 
-  web:
-    # From the repo root, so the build can see sdk/ next to the app.
+  server:
     build:
-      context: .
-      dockerfile: clients/apps/web/Dockerfile
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
     environment:
       DATABASE_URL: postgres://todone:${POSTGRES_PASSWORD:-todone}@db:5432/todone
+      # The public address is the web app's: people sign in through it.
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
@@ -44,6 +44,18 @@ services:
       db:
         condition: service_healthy
 
+  web:
+    build:
+      context: ..
+      dockerfile: clients/apps/web/Dockerfile
+      args:
+        SERVER_URL: http://server:4000
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - server
+
   # Sends due push reminders: calls the app every 10 minutes (needs CRON_SECRET; does nothing without it).
   reminders:
     image: curlimages/curl:8.10.1
@@ -56,10 +68,10 @@ services:
       - |
         while true; do
           sleep 600
-          [ -n "$$CRON_SECRET" ] && curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://web:3000/api/cron/notify
+          [ -n "$$CRON_SECRET" ] && curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://server:4000/api/cron/notify
         done
     depends_on:
-      - web
+      - server
 
   # The public address: a Cloudflare Tunnel to the app. Make a tunnel in Cloudflare Zero Trust whose
   # public hostname points at http://web:3000, and set CLOUDFLARE_TUNNEL_TOKEN.

@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
-import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { db } from "./db.ts";
 
@@ -66,7 +65,6 @@ export const auth = betterAuth({
         },
       },
     }),
-    nextCookies(),
   ],
 });
 

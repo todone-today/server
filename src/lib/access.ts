@@ -1,6 +1,6 @@
-import { headers } from "next/headers";
-import { auth } from "./auth";
-import { db } from "./db";
+import { ApiError, requestHeaders } from "../context.ts";
+import { auth } from "./auth.ts";
+import { db } from "./db.ts";
 import type { List } from "@todone/sdk/tasks";
 
 // A list the user may touch ($1 = user id): their own, or one in an organization they belong to.
@@ -8,8 +8,8 @@ export const MINE = `("userId" = $1 or "organizationId" in (select "organization
 
 // The signed-in user and the workspace they're in: "u:<user>" for personal lists, "o:<org>" for a team.
 export async function who() {
-  const s = await auth.api.getSession({ headers: await headers() });
-  if (!s) throw new Error("Signed out");
+  const s = await auth.api.getSession({ headers: requestHeaders() });
+  if (!s) throw new ApiError(401, "Signed out");
   const user = s.user.id;
   const org = s.session.activeOrganizationId ?? null;
   let role = "owner";
@@ -18,7 +18,7 @@ export async function who() {
       user,
       org,
     ]);
-    if (!m.rows[0]) throw new Error("Not a member");
+    if (!m.rows[0]) throw new ApiError(403, "Not a member");
     role = m.rows[0].role;
   }
   return { user, org, workspace: org ? `o:${org}` : `u:${user}`, manager: role === "owner" || role === "admin" };

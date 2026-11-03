@@ -1,9 +1,9 @@
 # Drone on the Mac mini (Docker runner).
-# Every push and pull request: lint, test and build the web app.
+# Every push and pull request: check the sdk, the server and the web app.
 # A push to main, once that passes: rebuild and restart todone with Docker Compose on the Mac mini's
 # own Docker. That needs the host's Docker socket, so mark this repo "Trusted" in Drone's settings.
 # Secrets (Drone → repo → Settings → Secrets) become the app's settings; only better_auth_secret is
-# required. See clients/apps/web/.env.example for what each one does.
+# required. See server/.env.example for what each one does.
 kind: pipeline
 type: docker
 name: check
@@ -12,6 +12,22 @@ trigger:
   event: [push, pull_request]
 
 steps:
+  - name: sdk
+    image: node:24-alpine
+    commands:
+      - cd sdk
+      - npm ci
+      - npm run typecheck
+      - npm test
+
+  - name: server
+    image: node:24-alpine
+    commands:
+      - cd server
+      - npm ci
+      - npm run typecheck
+      - npm test
+
   - name: web
     image: node:24-alpine
     commands:
@@ -53,8 +69,8 @@ steps:
     commands:
       - test -n "$$BETTER_AUTH_SECRET" || { echo "Set the better_auth_secret secret in Drone first"; exit 1; }
       # The same project name every time, so each deploy replaces the last and keeps its data volumes.
-      - docker compose -p todone $${CLOUDFLARE_TUNNEL_TOKEN:+--profile tunnel} up -d --build --remove-orphans
-      - docker compose -p todone ps
+      - docker compose -f server/docker-compose.yml -p todone $${CLOUDFLARE_TUNNEL_TOKEN:+--profile tunnel} up -d --build --remove-orphans
+      - docker compose -f server/docker-compose.yml -p todone ps
       - docker image prune -f
 
 volumes:

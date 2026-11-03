@@ -1,5 +1,5 @@
-import { workspaceLists } from "./access";
-import { db } from "./db";
+import { workspaceLists } from "./access.ts";
+import { db } from "./db.ts";
 import { type Link, type Remote, type Service, applyLocal, fingerprint, plan } from "@todone/sdk/sync";
 import type { Task } from "@todone/sdk/tasks";
 

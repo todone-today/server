@@ -1,7 +1,7 @@
-import { db } from "./db";
-import { GOOGLE, googleAdapter } from "./google";
-import { NOTION, notionAdapter } from "./notion";
-import { runSync } from "./sync-run";
+import { db } from "./db.ts";
+import { GOOGLE, googleAdapter } from "./google.ts";
+import { NOTION, notionAdapter } from "./notion.ts";
+import { runSync } from "./sync-run.ts";
 
 type Row = {
   notionToken: string | null;

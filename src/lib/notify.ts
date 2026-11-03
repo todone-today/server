@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db } from "./db.ts";
 import { changes } from "@todone/sdk/integrations";
 import type { Task } from "@todone/sdk/tasks";
 

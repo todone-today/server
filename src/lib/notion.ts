@@ -1,4 +1,4 @@
-import type { Adapter } from "./sync-run";
+import type { Adapter } from "./sync-run.ts";
 import type { Remote, Service } from "@todone/sdk/sync";
 import type { Task } from "@todone/sdk/tasks";
 

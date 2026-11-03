@@ -1,8 +1,8 @@
-import { auth } from "./auth";
-import { db } from "./db";
+import { auth } from "./auth.ts";
+import { db } from "./db.ts";
 import { type Event, eventTimes, fromEvent } from "@todone/sdk/integrations";
 import type { Remote, Service } from "@todone/sdk/sync";
-import type { Adapter } from "./sync-run";
+import type { Adapter } from "./sync-run.ts";
 import type { Task } from "@todone/sdk/tasks";
 
 // Dated open tasks live as events on a "todone" calendar; deleting an event unschedules its task.
