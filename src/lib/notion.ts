@@ -1,6 +1,6 @@
 import type { Adapter } from "./sync-run";
-import type { Remote, Service } from "./sync";
-import type { Task } from "./tasks";
+import type { Remote, Service } from "@todone/sdk/sync";
+import type { Task } from "@todone/sdk/tasks";
 
 // Notion's REST API, two-way with one database the user shares with their integration.
 const call = async (token: string, path: string, method = "GET", body?: unknown) => {

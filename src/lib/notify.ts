@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { changes } from "./integrations";
-import type { Task } from "./tasks";
+import { changes } from "@todone/sdk/integrations";
+import type { Task } from "@todone/sdk/tasks";
 
 // Posts "added" and "finished" lines to the workspace's Discord channel, if one is connected.
 export async function notifyDiscord(workspace: string, userId: string, list: string, before: Task[], after: Task[]) {

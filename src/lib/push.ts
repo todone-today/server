@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { db } from "./db";
-import { localNow, dueNotes } from "./reminders";
-import type { Task } from "./tasks";
+import { localNow, dueNotes } from "@todone/sdk/reminders";
+import type { Task } from "@todone/sdk/tasks";
 
 // Web Push with this server's VAPID key pair (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).
 export const pushReady = () => !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { auth } from "./auth";
 import { db } from "./db";
-import type { List } from "./tasks";
+import type { List } from "@todone/sdk/tasks";
 
 // A list the user may touch ($1 = user id): their own, or one in an organization they belong to.
 export const MINE = `("userId" = $1 or "organizationId" in (select "organizationId" from member where "userId" = $1))`;

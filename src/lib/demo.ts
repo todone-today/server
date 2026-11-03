@@ -1,6 +1,6 @@
 // The lists a new account starts with: each task shows (or asks you to try) one thing todone does.
-import { addDays } from "./calendar.ts";
-import { type Task, parse } from "./tasks.ts";
+import { addDays } from "@todone/sdk/calendar";
+import { type Task, parse } from "@todone/sdk/tasks";
 
 export function demoLists(today: string): { name: string; tasks: Task[]; kind?: "ideas" }[] {
   const tomorrow = addDays(today, 1);

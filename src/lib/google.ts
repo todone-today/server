@@ -1,9 +1,9 @@
 import { auth } from "./auth";
 import { db } from "./db";
-import { type Event, eventTimes, fromEvent } from "./integrations";
-import type { Remote, Service } from "./sync";
+import { type Event, eventTimes, fromEvent } from "@todone/sdk/integrations";
+import type { Remote, Service } from "@todone/sdk/sync";
 import type { Adapter } from "./sync-run";
-import type { Task } from "./tasks";
+import type { Task } from "@todone/sdk/tasks";
 
 // Dated open tasks live as events on a "todone" calendar; deleting an event unschedules its task.
 export const GOOGLE: Service = {

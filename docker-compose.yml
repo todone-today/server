@@ -20,7 +20,10 @@ services:
       retries: 30
 
   web:
-    build: ./clients/apps/web
+    # From the repo root, so the build can see sdk/ next to the app.
+    build:
+      context: .
+      dockerfile: clients/apps/web/Dockerfile
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

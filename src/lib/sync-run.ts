@@ -1,7 +1,7 @@
 import { workspaceLists } from "./access";
 import { db } from "./db";
-import { type Link, type Remote, type Service, applyLocal, fingerprint, plan } from "./sync";
-import type { Task } from "./tasks";
+import { type Link, type Remote, type Service, applyLocal, fingerprint, plan } from "@todone/sdk/sync";
+import type { Task } from "@todone/sdk/tasks";
 
 export type Adapter = {
   pull: (links: Link[]) => Promise<Remote[]>;
