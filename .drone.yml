@@ -3,7 +3,7 @@
 # A push to main, once that passes: rebuild and restart todone with Docker Compose on the Mac mini's
 # own Docker. That needs the host's Docker socket, so mark this repo "Trusted" in Drone's settings.
 # Secrets (Drone → repo → Settings → Secrets) become the app's settings; only better_auth_secret is
-# required. See web/.env.example for what each one does.
+# required. See clients/apps/web/.env.example for what each one does.
 kind: pipeline
 type: docker
 name: check
@@ -15,7 +15,7 @@ steps:
   - name: web
     image: node:24-alpine
     commands:
-      - cd web
+      - cd clients/apps/web
       - npm ci
       - npm run lint
       - npm test

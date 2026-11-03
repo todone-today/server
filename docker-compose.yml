@@ -1,7 +1,7 @@
 # Runs todone: Postgres, the web app, reminders, and (optionally) a Cloudflare Tunnel.
 #   docker compose up -d --build                 then open http://localhost:3000
 #   docker compose --profile tunnel up -d        also starts the tunnel (needs CLOUDFLARE_TUNNEL_TOKEN)
-# Settings come from the environment or a .env file next to this one; see web/.env.example.
+# Settings come from the environment or a .env file next to this one; see clients/apps/web/.env.example.
 services:
   db:
     image: postgres:17-alpine
@@ -20,7 +20,7 @@ services:
       retries: 30
 
   web:
-    build: ./web
+    build: ./clients/apps/web
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
