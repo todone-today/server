@@ -10,7 +10,7 @@ function configure() {
   if (configured || !pushReady()) return pushReady();
   const url = process.env.BETTER_AUTH_URL ?? "";
   webpush.setVapidDetails(
-    url.startsWith("https://") ? url : "https://github.com/1stdevfriend/todone",
+    url.startsWith("https://") ? url : "https://github.com/todone-today",
     process.env.VAPID_PUBLIC_KEY!,
     process.env.VAPID_PRIVATE_KEY!,
   );
