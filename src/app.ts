@@ -4,6 +4,8 @@ import { csrf } from "hono/csrf";
 import { HTTPException } from "hono/http-exception";
 import { ApiError, request } from "./context.ts";
 import { auth, hasGithub, hasGoogle } from "./lib/auth.ts";
+import { db as pool } from "./lib/db.ts";
+import { demoLists } from "./lib/demo.ts";
 import * as lists from "./actions/lists.ts";
 import * as integrations from "./actions/integrations.ts";
 import * as push from "./actions/push.ts";
@@ -37,6 +39,21 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 // Accounts, sessions and teams: Better Auth checks the origin of its own requests.
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle }));
+// The sample lists for the demo at /demo, dated from the visitor's today. Nothing is stored.
+app.get("/api/demo", (c) => {
+  const q = c.req.query("today") ?? "";
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(q) ? q : new Date().toISOString().slice(0, 10);
+  return c.json(demoLists(today));
+});
+// For the status page and uptime checks: is the API up, and can it reach the database?
+app.get("/api/health", async (c) => {
+  const t = performance.now();
+  const db = await pool
+    .query("select 1")
+    .then(() => true)
+    .catch(() => false);
+  return c.json({ api: true, db, ms: Math.round(performance.now() - t) }, db ? 200 : 503, { "cache-control": "no-store" });
+});
 
 // Links that work without signing in: each is guarded by its own secret token.
 app.get("/api/calendar/:file", (c) => feed(c.req.raw, c.req.param("file")));

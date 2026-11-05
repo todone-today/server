@@ -13,7 +13,8 @@
     "start": "node src/main.ts",
     "test": "node --test src/**/*.test.ts",
     "typecheck": "tsc",
-    "vercel-build": "node scripts/vercel-build.ts"
+    "vercel-build": "node scripts/vercel-build.ts",
+    "feedback": "node --env-file-if-exists=.env.local scripts/feedback.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
