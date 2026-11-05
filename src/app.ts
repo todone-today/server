@@ -51,9 +51,12 @@ app.get("/api/cron/notify", (c) => cron(c.req.raw));
 
 // Everything below is the signed-in person's own data. Cross-site form posts are refused; JSON from another
 // site can't be sent without a CORS preflight, which this server never grants.
-const origin = process.env.BETTER_AUTH_URL && new URL(process.env.BETTER_AUTH_URL).origin;
+// The web app's address, plus any other sites Better Auth trusts (e.g. a preview next to production).
+const origins = [process.env.BETTER_AUTH_URL, ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",")]
+  .filter((u): u is string => !!u?.trim())
+  .map((u) => new URL(u.trim()).origin);
 const me = new Hono();
-me.use("*", csrf(origin ? { origin } : undefined));
+me.use("*", csrf(origins.length ? { origin: origins } : undefined));
 
 me.get("/lists", async (c) => c.json(await lists.fetchLists()));
 me.post("/lists", async (c) => {
