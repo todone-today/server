@@ -12,7 +12,8 @@
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.ts",
     "start": "node src/main.ts",
     "test": "node --test src/**/*.test.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "vercel-build": "node scripts/vercel-build.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
@@ -29,6 +30,7 @@
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
     "@types/web-push": "^3.6.4",
+    "esbuild": "^0.28.2",
     "typescript": "^5"
   }
 }
