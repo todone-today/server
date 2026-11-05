@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
-    "@todone/sdk": "git+https://github.com/todone-today/sdk.git#v0.1.0",
+    "@todone/sdk": "github:todone-today/sdk#v0.1.1",
     "@vercel/functions": "^3.10.6",
     "better-auth": "^1.7.14",
     "hono": "^4.13.16",

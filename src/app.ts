@@ -2,8 +2,8 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { csrf } from "hono/csrf";
 import { HTTPException } from "hono/http-exception";
-import { ApiError, request } from "./context.ts";
-import { auth, hasGithub, hasGoogle } from "./lib/auth.ts";
+import { ApiError, later, request } from "./context.ts";
+import { auth, hasGithub, hasGoogle, purgeUnverified, verifiesEmail } from "./lib/auth.ts";
 import { db as pool } from "./lib/db.ts";
 import { demoLists } from "./lib/demo.ts";
 import * as lists from "./actions/lists.ts";
@@ -37,8 +37,12 @@ const body = async (c: Context): Promise<Record<string, unknown>> => {
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
 // Accounts, sessions and teams: Better Auth checks the origin of its own requests.
-app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
-app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle }));
+app.on(["GET", "POST"], "/api/auth/*", (c) => {
+  // The 7-day clean-up of unconfirmed accounts also runs on each sign-up, so it happens without a scheduler.
+  if (c.req.path === "/api/auth/sign-up/email") later(purgeUnverified);
+  return auth.handler(c.req.raw);
+});
+app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, verifiesEmail }));
 // The sample lists for the demo at /demo, dated from the visitor's today. Nothing is stored.
 app.get("/api/demo", (c) => {
   const q = c.req.query("today") ?? "";

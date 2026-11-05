@@ -54,6 +54,11 @@ create table if not exists push_sent (
   "sentAt" timestamptz not null default now(),
   primary key ("userId", key)
 );
+-- Accounts from before email confirmation existed count as confirmed, so the 7-day clean-up never touches them.
+update "user" set "emailVerified" = true where "emailVerified" = false and "createdAt" < '2026-11-06T12:00:00Z';
+-- Gravatar pictures for accounts that have none (new accounts get one when they sign up).
+update "user" set image = 'https://gravatar.com/avatar/' || encode(sha256(convert_to(lower(trim(email)), 'UTF8')), 'hex') || '?s=160&d=404'
+  where image is null or image = '';
 -- What people send from "Send feedback": bugs, ideas, anything else. Read it straight from the database.
 create table if not exists feedback (
   id bigserial primary key,
