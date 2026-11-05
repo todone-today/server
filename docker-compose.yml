@@ -2,8 +2,7 @@
 #   docker compose up -d --build                 then open http://localhost:3000
 #   docker compose --profile tunnel up -d        also starts the tunnel (needs CLOUDFLARE_TUNNEL_TOKEN)
 # Settings come from the environment or a .env file next to this one; see .env.example.
-# Images build from the repo root (..), since the server and the web app both use sdk/. Once they're
-# separate repos, point the contexts at their git URLs.
+# The server builds from this repo; the web app straight from github.com/todone-today/clients.
 services:
   db:
     image: postgres:17-alpine
@@ -22,9 +21,7 @@ services:
       retries: 30
 
   server:
-    build:
-      context: ..
-      dockerfile: server/Dockerfile
+    build: .
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://todone:${POSTGRES_PASSWORD:-todone}@db:5432/todone
@@ -46,8 +43,7 @@ services:
 
   web:
     build:
-      context: ..
-      dockerfile: clients/apps/web/Dockerfile
+      context: https://github.com/todone-today/clients.git#main:apps/web
       args:
         SERVER_URL: http://server:4000
     restart: unless-stopped

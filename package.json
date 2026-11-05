@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
-    "@todone/sdk": "file:../sdk",
+    "@todone/sdk": "github:todone-today/sdk#v0.1.0",
     "@vercel/functions": "^3.10.6",
     "better-auth": "^1.7.14",
     "hono": "^4.13.16",
@@ -32,5 +32,9 @@
     "@types/web-push": "^3.6.4",
     "esbuild": "^0.28.2",
     "typescript": "^5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/todone-today/server.git"
   }
 }

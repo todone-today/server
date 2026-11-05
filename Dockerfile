@@ -1,10 +1,10 @@
-# Built from the repo root: the server depends on sdk/ (file:../sdk), so it keeps that layout.
 FROM node:24-alpine
-WORKDIR /repo/server
-COPY sdk /repo/sdk
-COPY server/package.json server/package-lock.json ./
+# git: npm fetches @todone/sdk from GitHub.
+RUN apk add --no-cache git
+WORKDIR /app
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server .
+COPY . .
 ENV NODE_ENV=production PORT=4000
 EXPOSE 4000
 # Without BETTER_AUTH_SECRET, make one once and keep it in the data volume so sessions survive restarts.

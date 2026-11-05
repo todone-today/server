@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    # main -> production at todone-server.vercel.app (the API behind todone.today), after migrating the database.
+    if: github.event_name == 'push'
+    needs: [check]
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_NNPaLOvnhZx4WAk5fFqcBoW8
+      VERCEL_PROJECT_ID: prj_CK3qKEWLmAayjPeqWD3qMoxTQq65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Migrate and deploy
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN secret is not set; skipping deploy"
+            exit 0
+          fi
+          npm i -g vercel@57
+          npm ci
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          # Vercel hands sensitive values back as "[SENSITIVE]"; migrating only needs the database, so placeholders do.
+          BETTER_AUTH_URL=http://localhost BETTER_AUTH_SECRET=migrate-only \
+            node --env-file=.vercel/.env.production.local scripts/migrate.ts
+          vercel deploy --prod --yes --token="$VERCEL_TOKEN"
