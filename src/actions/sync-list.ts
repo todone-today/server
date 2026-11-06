@@ -8,10 +8,10 @@ async function find(token: string, name: string) {
   if (!w.rows[0]) return null;
   const ws = w.rows[0].id;
   const owner = ws.startsWith("o:") ? `"organizationId"` : `"userId"`;
-  const l = await db.query<Row>(`select id, tasks, version from list where ${owner} = $1 and name = $2 and kind = 'list'`, [
-    ws.slice(2),
-    name,
-  ]);
+  const l = await db.query<Row>(
+    `select id, tasks, version from list where ${owner} = $1 and name = $2 and kind = 'list' and data is null`,
+    [ws.slice(2), name],
+  );
   return { ws, list: l.rows[0] ?? null };
 }
 

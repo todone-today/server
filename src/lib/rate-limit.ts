@@ -12,6 +12,8 @@ export function ruleFor(method: string, path: string): Rule | null {
   // Links that work without signing in, guarded only by their token: slow down anyone guessing tokens.
   if (/^\/api\/(sync|calendar|shared)\//.test(path)) return { name: "links", max: 60, seconds: 60 };
   if (path === "/api/demo") return { name: "demo", max: 30, seconds: 60 };
+  if (path === "/api/prelogin") return { name: "prelogin", max: 30, seconds: 60 };
+  if (/^\/api\/keys\/(recovery|recover|reset-account)$/.test(path)) return { name: "recovery", max: 10, seconds: 3600 };
   if (method !== "GET") return { name: "writes", max: 120, seconds: 60 };
   return { name: "reads", max: 600, seconds: 60 };
 }

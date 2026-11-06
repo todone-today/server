@@ -41,12 +41,8 @@ steps:
       BETTER_AUTH_SECRET: { from_secret: better_auth_secret }
       BETTER_AUTH_URL: { from_secret: better_auth_url }
       POSTGRES_PASSWORD: { from_secret: postgres_password }
-      VAPID_PUBLIC_KEY: { from_secret: vapid_public_key }
-      VAPID_PRIVATE_KEY: { from_secret: vapid_private_key }
       CRON_SECRET: { from_secret: cron_secret }
       RESEND_API_KEY: { from_secret: resend_api_key }
-      GITHUB_CLIENT_ID: { from_secret: github_client_id }
-      GITHUB_CLIENT_SECRET: { from_secret: github_client_secret }
       GOOGLE_CLIENT_ID: { from_secret: google_client_id }
       GOOGLE_CLIENT_SECRET: { from_secret: google_client_secret }
       CLOUDFLARE_TUNNEL_TOKEN: { from_secret: cloudflare_tunnel_token }

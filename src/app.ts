@@ -11,7 +11,7 @@ import { db as pool } from "./lib/db.ts";
 import { demoLists } from "./lib/demo.ts";
 import * as lists from "./actions/lists.ts";
 import * as integrations from "./actions/integrations.ts";
-import * as push from "./actions/push.ts";
+import * as keys from "./actions/keys.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
 import { sharedView } from "./actions/shared.ts";
@@ -82,6 +82,11 @@ app.get("/api/sync/:token", (c) => syncedLists(c.req.param("token")));
 app.get("/api/sync/:token/:list", (c) => getList(c.req.param("token"), c.req.param("list")));
 app.put("/api/sync/:token/:list", (c) => putList(c.req.raw, c.req.param("token"), c.req.param("list")));
 app.get("/api/cron/notify", (c) => cron(c.req.raw));
+// Before signing in, and forgot-password: how to derive keys, and the recovery-key reset (token-guarded).
+app.post("/api/prelogin", async (c) => c.json(await keys.prelogin((await body(c)).email)));
+app.post("/api/keys/recovery", async (c) => c.json(await keys.recoveryFor((await body(c)).token)));
+app.post("/api/keys/recover", async (c) => c.json(await keys.recover(await body(c))));
+app.post("/api/keys/reset-account", async (c) => c.json(await keys.resetAccount(await body(c))));
 
 // Everything below is the signed-in person's own data. Cross-site form posts are refused; JSON from another
 // site can't be sent without a CORS preflight, which this server never grants.
@@ -95,15 +100,15 @@ me.use("*", csrf(origins.length ? { origin: origins } : undefined));
 me.get("/lists", async (c) => c.json(await lists.fetchLists()));
 me.post("/lists", async (c) => {
   const b = await body(c);
-  return c.json(await lists.createList(str(b.id), str(b.name), b.tasks, b.kind));
+  return c.json(await lists.createList(str(b.id), b.name, b.tasks, b.kind, b.data));
 });
 me.put("/lists/order", async (c) => c.json(await lists.reorderLists((await body(c)).ids)));
 me.put("/lists/:id", async (c) => {
   const b = await body(c);
-  return c.json(await lists.saveList(c.req.param("id"), Number(b.version), str(b.name), b.tasks));
+  return c.json(await lists.saveList(c.req.param("id"), Number(b.version), b.name, b.tasks, b.data));
 });
 me.delete("/lists/:id", async (c) => c.json(await lists.deleteList(c.req.param("id"))));
-me.post("/onboarding", async (c) => c.json(await lists.startOnboarding((await body(c)).today)));
+me.post("/onboarding", async (c) => c.json(await lists.startOnboarding()));
 me.get("/export", async (c) => c.json(await lists.exportData()));
 me.post("/feedback", async (c) => {
   const b = await body(c);
@@ -128,13 +133,12 @@ me.post("/shares", async (c) => {
 });
 me.delete("/shares/:token", async (c) => c.json(await integrations.stopShare(c.req.param("token"))));
 
-me.get("/push/key", async (c) => c.json(await push.pushKey()));
-me.post("/push/subscription", async (c) => {
-  const b = await body(c);
-  return c.json(await push.subscribePush(b.sub, b.timeZone));
-});
-me.delete("/push/subscription", async (c) => c.json(await push.unsubscribePush((await body(c)).endpoint)));
-me.post("/push/test", async (c) => c.json(await push.testPush()));
+me.get("/keys", async (c) => c.json(await keys.myKeys()));
+me.post("/keys/setup", async (c) => c.json(await keys.setupKeys(await body(c))));
+me.post("/keys/password", async (c) => c.json(await keys.changePassword(await body(c))));
+me.post("/keys/recovery-key", async (c) => c.json(await keys.newRecoveryKey(await body(c))));
+me.get("/orgs/:id/keys", async (c) => c.json(await keys.teamKeys(c.req.param("id"))));
+me.put("/orgs/:id/keys", async (c) => c.json(await keys.giveTeamKeys(c.req.param("id"), (await body(c)).keys)));
 
 app.route("/api", me);
 app.notFound((c) => c.json({ error: "Not found" }, 404));

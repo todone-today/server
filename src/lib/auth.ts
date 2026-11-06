@@ -5,11 +5,8 @@ import { createHash } from "node:crypto";
 import { db } from "./db.ts";
 import { canEmail, sendEmail } from "./email.ts";
 
-const github =
-  process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
-    ? { github: { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET } }
-    : undefined;
-// Google sign-in, and the account the Calendar integration links to (offline: so syncing works while you're away).
+// The Google account the Calendar integration links to (offline: so syncing works while you're away). Not a way to
+// make an account: with end-to-end encryption, only the password can open your lists.
 const google =
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? {
@@ -18,6 +15,7 @@ const google =
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
           accessType: "offline" as const,
           prompt: "select_account consent" as const,
+          disableSignUp: true,
         },
       }
     : undefined;
@@ -32,7 +30,7 @@ export const auth = betterAuth({
     sendResetPassword: canEmail
       ? async ({ user, url }) =>
           sendEmail(user.email, "Reset your todone password", {
-            lead: "Someone (hopefully you) asked to reset the password for your todone account.",
+            lead: "Someone (hopefully you) asked to reset the password for your todone account. Your lists are end-to-end encrypted, so you'll need your recovery key to keep them.",
             action: "Choose a new password",
             url,
             after:
@@ -64,6 +62,17 @@ export const auth = betterAuth({
     },
   },
   user: {
+    // End-to-end encryption keys, made in the browser and sent with sign-up (see actions/keys.ts). Ciphertext and a
+    // public key only; never returned with the session (GET /api/keys hands them back).
+    additionalFields: {
+      kdfSalt: { type: "string", required: false, input: true, returned: false },
+      kdfIter: { type: "number", required: false, input: true, returned: false },
+      wrappedKey: { type: "string", required: false, input: true, returned: false },
+      recoveryWrappedKey: { type: "string", required: false, input: true, returned: false },
+      encryptedRecovery: { type: "string", required: false, input: true, returned: false },
+      publicKey: { type: "string", required: false, input: true, returned: false },
+      wrappedPrivateKey: { type: "string", required: false, input: true, returned: false },
+    },
     deleteUser: {
       enabled: true,
       // A team someone else still uses needs an owner, so the only owner hands it over (or deletes it) first;
@@ -81,7 +90,7 @@ export const auth = betterAuth({
       afterDelete: async (user) => dropWorkspace(`u:${user.id}`),
     },
   },
-  socialProviders: { ...github, ...google },
+  socialProviders: { ...google },
   // Slows down password guessing and email flooding. Counted in the database so every server instance agrees.
   rateLimit: {
     enabled: true,
@@ -157,6 +166,6 @@ async function dropWorkspace(ws: string, orgId?: string) {
   if (orgId) await db.query(`delete from organization where id = $1`, [orgId]);
 }
 
-export const hasGithub = !!github;
+export const hasGithub = false;
 export const verifiesEmail = canEmail;
 export const hasGoogle = !!google;

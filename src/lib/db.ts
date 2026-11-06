@@ -95,4 +95,17 @@ create table if not exists sync_map (
   primary key (workspace, service, "taskId")
 );
 drop table if exists notion_page;
+-- End-to-end encryption: a list's name and tasks as one ciphertext ("v1.<iv>.<ct>"), opened only in the browser.
+-- null = a list its owner switched off encryption, readable here (integrations use only those).
+alter table list add column if not exists data text;
+-- Each member's copy of their team's key, wrapped to their public key (user."publicKey").
+create table if not exists org_key (
+  "organizationId" text not null references organization(id) on delete cascade,
+  "userId" text not null references "user"(id) on delete cascade,
+  wrapped text not null,
+  primary key ("organizationId", "userId")
+);
+-- Server push reminders read task titles and times; with end-to-end encryption the app reminds instead.
+drop table if exists push_sent;
+drop table if exists push_sub;
 `;

@@ -24,11 +24,12 @@ export async function who() {
   return { user, org, workspace: org ? `o:${org}` : `u:${user}`, manager: role === "owner" || role === "admin" };
 }
 
-// Every list in a workspace, for the calendar feed and Notion sync (callers check access first).
+// Every readable list in a workspace, for the calendar feed, shared links and syncing (callers check access
+// first). End-to-end encrypted lists are left out: only lists their owner switched off encryption are readable.
 export async function workspaceLists(workspace: string) {
   const [kind, id] = [workspace.slice(0, 1), workspace.slice(2)];
   const { rows } = await db.query<{ id: string; name: string; tasks: List["tasks"]; version: number; updatedAt: Date }>(
-    `select id, name, tasks, version, "updatedAt" from list where ${kind === "o" ? `"organizationId"` : `"userId"`} = $1 and kind = 'list'`,
+    `select id, name, tasks, version, "updatedAt" from list where ${kind === "o" ? `"organizationId"` : `"userId"`} = $1 and kind = 'list' and data is null`,
     [id],
   );
   return rows.map((r): List => ({ id: r.id, name: r.name, tasks: r.tasks, version: r.version, updated: +r.updatedAt }));
