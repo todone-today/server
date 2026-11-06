@@ -82,6 +82,21 @@ export const auth = betterAuth({
     },
   },
   socialProviders: { ...github, ...google },
+  // Slows down password guessing and email flooding. Counted in the database so every server instance agrees.
+  rateLimit: {
+    enabled: true,
+    storage: "database",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 10 },
+      "/sign-up/email": { window: 3600, max: 10 },
+      "/request-password-reset": { window: 3600, max: 5 },
+      "/send-verification-email": { window: 3600, max: 5 },
+      "/change-password": { window: 3600, max: 10 },
+      "/delete-user": { window: 3600, max: 10 },
+    },
+  },
   // A calendar can live on a Google account with a different email than the todone login.
   account: { accountLinking: { allowDifferentEmails: true } },
   // ponytail: no email service yet, so invitations are shared as a link the inviter copies.

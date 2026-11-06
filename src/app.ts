@@ -1,8 +1,10 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { csrf } from "hono/csrf";
+import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { ApiError, later, request } from "./context.ts";
+import { clientIp, hit, pruneRateLimits, ruleFor } from "./lib/rate-limit.ts";
 import { auth, hasGithub, hasGoogle, purgeUnverified, verifiesEmail } from "./lib/auth.ts";
 import { db as pool } from "./lib/db.ts";
 import { demoLists } from "./lib/demo.ts";
@@ -20,8 +22,17 @@ import { getList, putList } from "./actions/sync-list.ts";
 const app = new Hono();
 
 app.use("*", bodyLimit({ maxSize: 2 * 1024 * 1024 }));
+app.use("*", secureHeaders());
 // Every handler can find out who's asking (see context.ts).
 app.use("*", (c, next) => request.run(c.req.raw.headers, next));
+
+// Rate limits per client address (lib/rate-limit.ts); sign-in and the like have Better Auth's own.
+app.use("/api/*", async (c, next) => {
+  const rule = ruleFor(c.req.method, c.req.path);
+  const wait = rule && (await hit(rule, clientIp(c.req.raw.headers)));
+  if (wait) return c.json({ error: "Too many requests. Try again in a moment." }, 429, { "retry-after": String(wait) });
+  await next();
+});
 
 app.onError((e, c) => {
   if (e instanceof ApiError) return c.json({ error: e.message }, e.status);
@@ -39,7 +50,7 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 // Accounts, sessions and teams: Better Auth checks the origin of its own requests.
 app.on(["GET", "POST"], "/api/auth/*", (c) => {
   // The 7-day clean-up of unconfirmed accounts also runs on each sign-up, so it happens without a scheduler.
-  if (c.req.path === "/api/auth/sign-up/email") later(purgeUnverified);
+  if (c.req.path === "/api/auth/sign-up/email") later(() => Promise.all([purgeUnverified(), pruneRateLimits()]));
   return auth.handler(c.req.raw);
 });
 app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, verifiesEmail }));

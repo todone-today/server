@@ -1,6 +1,6 @@
 import { who } from "../lib/access.ts";
 import { db } from "../lib/db.ts";
-import { pushReady, sendTo } from "../lib/push.ts";
+import { pushHost, pushReady, sendTo } from "../lib/push.ts";
 
 // The public half of the VAPID pair, for the browser to subscribe with; null if push isn't set up here.
 export async function pushKey(): Promise<string | null> {
@@ -13,12 +13,7 @@ export async function subscribePush(sub: unknown, timeZone: unknown): Promise<st
   const { user } = await who();
   const s = sub as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
   const ok = (v: unknown, max: number) => typeof v === "string" && v.length > 0 && v.length <= max;
-  if (
-    !ok(s?.endpoint, 1000) ||
-    !(s.endpoint as string).startsWith("https://") ||
-    !ok(s.keys?.p256dh, 200) ||
-    !ok(s.keys?.auth, 100)
-  )
+  if (!ok(s?.endpoint, 1000) || !pushHost(s.endpoint as string) || !ok(s.keys?.p256dh, 200) || !ok(s.keys?.auth, 100))
     return "That subscription doesn't look right.";
   const tz = typeof timeZone === "string" && Intl.supportedValuesOf("timeZone").includes(timeZone) ? timeZone : "UTC";
   await db.query(

@@ -4,6 +4,23 @@ import { localNow, dueNotes } from "@todone/sdk/reminders";
 import type { Task } from "@todone/sdk/tasks";
 
 // Web Push with this server's VAPID key pair (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).
+// Browsers' push services. The server POSTs to whatever endpoint is saved, so only these are accepted; anything
+// else would let a signed-in person point the server at an arbitrary address.
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /(^|\.)push\.services\.mozilla\.com$/,
+  /(^|\.)push\.apple\.com$/,
+  /\.notify\.windows\.com$/,
+];
+export const pushHost = (u: string) => {
+  try {
+    const url = new URL(u);
+    return url.protocol === "https:" && !url.port && PUSH_HOSTS.some((h) => h.test(url.hostname));
+  } catch {
+    return false;
+  }
+};
+
 export const pushReady = () => !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 let configured = false;
 function configure() {
@@ -27,7 +44,7 @@ export async function sendTo(userId: string, payload: Payload): Promise<number> 
     [userId],
   );
   let sent = 0;
-  for (const r of rows)
+  for (const r of rows.filter((r) => pushHost(r.endpoint)))
     try {
       await webpush.sendNotification(
         { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },

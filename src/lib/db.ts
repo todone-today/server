@@ -54,6 +54,13 @@ create table if not exists push_sent (
   "sentAt" timestamptz not null default now(),
   primary key ("userId", key)
 );
+-- Requests per client per time window, for the API's rate limits (lib/rate-limit.ts).
+create table if not exists rate_limit (
+  key text not null,
+  "window" bigint not null,
+  count int not null default 1,
+  primary key (key, "window")
+);
 -- Accounts from before email confirmation existed count as confirmed, so the 7-day clean-up never touches them.
 update "user" set "emailVerified" = true where "emailVerified" = false and "createdAt" < '2026-11-06T12:00:00Z';
 -- Gravatar pictures for accounts that have none (new accounts get one when they sign up).
