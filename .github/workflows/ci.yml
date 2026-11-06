@@ -19,7 +19,7 @@ jobs:
       - run: npm test
 
   deploy:
-    # main -> production at todone-server.vercel.app (the API behind todone.today), after migrating the database.
+    # main -> production at todone-server.vercel.app (the API behind todone.today); its build migrates the database.
     if: github.event_name == 'push'
     needs: [check]
     runs-on: ubuntu-latest
@@ -39,9 +39,5 @@ jobs:
             exit 0
           fi
           npm i -g vercel@57
-          npm ci
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          # Vercel hands sensitive values back as "[SENSITIVE]"; migrating only needs the database, so placeholders do.
-          BETTER_AUTH_URL=http://localhost BETTER_AUTH_SECRET=migrate-only \
-            node --env-file=.vercel/.env.production.local scripts/migrate.ts
+          # The build migrates the database (it can read the encrypted DATABASE_URL; CI can't).
           vercel deploy --prod --yes --token="$VERCEL_TOKEN"

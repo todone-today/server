@@ -1,7 +1,15 @@
 // Builds the server for Vercel as one bundled function in Vercel's Build Output format (.vercel/output).
 // Bundling sidesteps what Vercel's own TypeScript step can't follow: our .ts import paths and the sdk's .ts files.
+import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
+
+// Bring the database up to date first: the build is the one step that can read Vercel's encrypted settings.
+// Projects or environments without a database (previews) skip it.
+if (process.env.DATABASE_URL) {
+  const run = spawnSync(process.execPath, ["scripts/migrate.ts"], { stdio: "inherit" });
+  if (run.status !== 0) process.exit(run.status ?? 1);
+}
 
 const out = ".vercel/output";
 const fn = `${out}/functions/index.func`;
