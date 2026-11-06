@@ -1,0 +1,21 @@
+# The API's public address. Requests must carry the web app's secret header; anything else gets a 403, so the
+# X-Forwarded-For the web app's host (Vercel) sets is the real client and can be trusted for rate limits.
+{
+	servers {
+		trusted_proxies static 0.0.0.0/0 ::/0
+	}
+}
+
+{$API_DOMAIN} {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+	@web header X-Todone-Proxy {$PROXY_SECRET}
+	handle @web {
+		request_header -X-Todone-Proxy
+		reverse_proxy server:4000
+	}
+	respond 403
+}

@@ -1,6 +1,9 @@
 # Runs todone: Postgres, the server, the web app, reminders, and (optionally) a Cloudflare Tunnel.
 #   docker compose up -d --build                 then open http://localhost:3000
 #   docker compose --profile tunnel up -d        also starts the tunnel (needs CLOUDFLARE_TUNNEL_TOKEN)
+#   docker compose up -d db server reminders caddy
+#                                                the API alone on a VPS, at https://$API_DOMAIN, with the web app
+#                                                elsewhere (Vercel) forwarding /api to it (needs PROXY_SECRET)
 # Settings come from the environment or a .env file next to this one; see .env.example.
 # The server builds from this repo; the web app straight from github.com/todone-today/clients.
 services:
@@ -28,6 +31,7 @@ services:
       # The public address is the web app's: people sign in through it.
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -83,6 +87,29 @@ services:
     depends_on:
       - web
 
+  # HTTPS for the API on its own address, for a web app hosted elsewhere. Only port 443: certificates come by the
+  # TLS-ALPN challenge, so port 80 can stay with something else. Requests without the web app's PROXY_SECRET
+  # header are refused, which is what makes the client IP it forwards trustworthy for rate limits.
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    profiles: [api]
+    command:
+      - sh
+      - -c
+      - '[ -n "$$PROXY_SECRET" ] || { echo "Set PROXY_SECRET first"; exit 1; }; exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile'
+    ports:
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-}
+      PROXY_SECRET: ${PROXY_SECRET:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    depends_on:
+      - server
+
 volumes:
   pg:
   data:
+  caddy:
