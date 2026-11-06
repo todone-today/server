@@ -1,4 +1,5 @@
 // Runs the API as a long-lived Node server (Docker, the Mac mini, local development).
+import "./instrument.ts";
 import { serve } from "@hono/node-server";
 import app from "./app.ts";
 

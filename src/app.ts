@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import * as Sentry from "@sentry/node";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
@@ -38,6 +39,7 @@ app.onError((e, c) => {
   if (e instanceof ApiError) return c.json({ error: e.message }, e.status);
   if (e instanceof HTTPException) return e.getResponse(); // e.g. the CSRF check's 403
   console.error(e);
+  Sentry.captureException(e);
   return c.json({ error: "Something went wrong." }, 500);
 });
 
