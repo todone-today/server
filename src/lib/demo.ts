@@ -10,7 +10,7 @@ export function demoLists(today: string): { name: string; tasks: Task[]; kind?: 
       tasks: parse(
         [
           `- [ ] Tick me off`,
-          `- [ ] Plan the week ⏫ ⏱ 30m 📅 ${today} ⏰ 16:00`,
+          `- [ ] Plan the week ⏫ ⏱ 30m 💪 m 📅 ${today} ⏰ 16:00`,
           `  - [ ] Look at the calendar`,
           `  - [ ] Pick three things that matter`,
           `- [ ] Drag me onto the Tomorrow sticker`,

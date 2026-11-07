@@ -22,6 +22,7 @@ function copy(x: unknown): Task {
     ...(t?.at ? { at: t.at } : {}),
     ...(t?.est ? { est: t.est } : {}),
     ...(t?.pri ? { pri: t.pri } : {}),
+    ...(t?.effort ? { effort: t.effort } : {}),
     ...(t?.rep ? { rep: t.rep } : {}),
     ...(t?.note ? { note: t.note } : {}),
     sub: (t?.sub ?? []).map((s) => ({ id: s.id, title: s.title, done: !!s.done, sub: [] })),
