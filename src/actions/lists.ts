@@ -24,7 +24,7 @@ const toList = (r: Row): Stored => ({
   tasks: r.tasks,
   version: r.version,
   updated: +r.updatedAt,
-  ...(r.kind === "ideas" ? { kind: "ideas" } : {}),
+  ...(r.kind === "ideas" || r.kind === "bin" ? { kind: r.kind } : {}),
   ...(r.position !== null ? { position: r.position } : {}),
   ...(r.data ? { data: r.data } : {}),
 });
@@ -57,7 +57,7 @@ export async function createList(
   data?: unknown,
 ): Promise<Stored> {
   const { user, org } = await who();
-  if (!/^[\w-]{8,40}$/.test(id) || (kind !== "list" && kind !== "ideas")) throw bad("Invalid list");
+  if (!/^[\w-]{8,40}$/.test(id) || !["list", "ideas", "bin"].includes(kind as string)) throw bad("Invalid list");
   const c = contents(name, tasks, data);
   const { rows } = await db.query<Row>(
     `insert into list (id, "userId", "organizationId", name, tasks, kind, data) values ($1, $2, $3, $4, $5, $6, $7) returning ${COLS}`,

@@ -98,6 +98,9 @@ drop table if exists notion_page;
 -- End-to-end encryption: a list's name and tasks as one ciphertext ("v1.<iv>.<ct>"), opened only in the browser.
 -- null = a list its owner switched off encryption, readable here (integrations use only those).
 alter table list add column if not exists data text;
+-- A workspace's bin (recently deleted tasks, kept 7 days by the app) is a list of kind 'bin'.
+alter table list drop constraint if exists list_kind_check;
+alter table list add constraint list_kind_check check (kind in ('list', 'ideas', 'bin'));
 -- Each member's copy of their team's key, wrapped to their public key (user."publicKey").
 create table if not exists org_key (
   "organizationId" text not null references organization(id) on delete cascade,
