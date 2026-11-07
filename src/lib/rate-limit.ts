@@ -13,6 +13,16 @@ export function ruleFor(method: string, path: string): Rule | null {
   if (/^\/api\/(sync|calendar|shared)\//.test(path)) return { name: "links", max: 60, seconds: 60 };
   if (path === "/api/demo") return { name: "demo", max: 30, seconds: 60 };
   if (path === "/api/prelogin") return { name: "prelogin", max: 30, seconds: 60 };
+  // Shared-task links (no account): reads, comments and uploads, per link.
+  const s = path.match(/^\/api\/s\/([\w-]+)(\/.*)?$/);
+  if (s) {
+    const rest = s[2] ?? "";
+    if (method === "GET") return { name: `s-read:${s[1]}`, max: 120, seconds: 60 };
+    if (rest.startsWith("/comments")) return { name: `s-comment:${s[1]}`, max: 20, seconds: 60 };
+    return { name: `s-upload:${s[1]}`, max: 30, seconds: 3600 };
+  }
+  if (/^\/api\/(files|task-shares\/[\w-]+\/files)$/.test(path) && method === "POST")
+    return { name: "uploads", max: 60, seconds: 3600 };
   if (/^\/api\/keys\/(recovery|recover|reset-account)$/.test(path)) return { name: "recovery", max: 10, seconds: 3600 };
   if (method !== "GET") return { name: "writes", max: 120, seconds: 60 };
   return { name: "reads", max: 600, seconds: 60 };

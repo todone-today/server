@@ -12,6 +12,9 @@ import { demoLists } from "./lib/demo.ts";
 import * as lists from "./actions/lists.ts";
 import * as integrations from "./actions/integrations.ts";
 import * as keys from "./actions/keys.ts";
+import * as files from "./actions/files.ts";
+import * as shares from "./actions/shares.ts";
+import { hasFiles } from "./lib/r2.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
 import { sharedView } from "./actions/shared.ts";
@@ -55,7 +58,7 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
   if (c.req.path === "/api/auth/sign-up/email") later(() => Promise.all([purgeUnverified(), pruneRateLimits()]));
   return auth.handler(c.req.raw);
 });
-app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, verifiesEmail }));
+app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, verifiesEmail, files: hasFiles }));
 // The sample lists for the demo at /demo, dated from the visitor's today. Nothing is stored.
 app.get("/api/demo", (c) => {
   const q = c.req.query("today") ?? "";
@@ -83,6 +86,23 @@ app.get("/api/sync/:token/:list", (c) => getList(c.req.param("token"), c.req.par
 app.put("/api/sync/:token/:list", (c) => putList(c.req.raw, c.req.param("token"), c.req.param("list")));
 app.get("/api/cron/notify", (c) => cron(c.req.raw));
 // Before signing in, and forgot-password: how to derive keys, and the recovery-key reset (token-guarded).
+// A shared task's link (no account): the token is the key. The guest's random browser key comes in x-guest.
+app.get("/api/s/:token", async (c) => c.json(await shares.guestView(c.req.param("token"), c.req.header("x-guest"))));
+app.post("/api/s/:token/comments", async (c) => {
+  const share = await shares.byToken(c.req.param("token"));
+  const b = await body(c);
+  const guest = await shares.guestNo(share, c.req.header("x-guest"), true);
+  return c.json(await shares.addComment(share, b, { guest }));
+});
+app.post("/api/s/:token/files", async (c) =>
+  c.json(await shares.shareUpload(await shares.byToken(c.req.param("token")), await body(c))),
+);
+app.post("/api/s/:token/files/:id/done", async (c) =>
+  c.json(await shares.shareConfirm(await shares.byToken(c.req.param("token")), c.req.param("id"))),
+);
+app.get("/api/s/:token/files/:id", async (c) =>
+  c.json(await shares.shareLink(await shares.byToken(c.req.param("token")), c.req.param("id"))),
+);
 app.post("/api/prelogin", async (c) => c.json(await keys.prelogin((await body(c)).email)));
 app.post("/api/keys/recovery", async (c) => c.json(await keys.recoveryFor((await body(c)).token)));
 app.post("/api/keys/recover", async (c) => c.json(await keys.recover(await body(c))));
@@ -133,6 +153,24 @@ me.post("/shares", async (c) => {
 });
 me.delete("/shares/:token", async (c) => c.json(await integrations.stopShare(c.req.param("token"))));
 
+me.post("/files", async (c) => c.json(await files.createFile(await body(c))));
+me.post("/files/:id/done", async (c) => c.json(await files.confirmFile(c.req.param("id"))));
+me.get("/files/:id", async (c) => c.json(await files.fileLink(c.req.param("id"))));
+me.delete("/files/:id", async (c) => c.json(await files.deleteFile(c.req.param("id"))));
+me.post("/task-shares", async (c) => c.json(await shares.createShare((await body(c)).task)));
+me.get("/task-shares/:id", async (c) => c.json(await shares.ownerView(c.req.param("id"))));
+me.put("/task-shares/:id", async (c) => {
+  const b = await body(c);
+  return c.json(await shares.updateShare(c.req.param("id"), b.task, b.files));
+});
+me.post("/task-shares/:id/rotate", async (c) => c.json(await shares.rotateShare(c.req.param("id"))));
+me.delete("/task-shares/:id", async (c) => c.json(await shares.revokeShare(c.req.param("id"))));
+me.post("/task-shares/:id/comments", async (c) => c.json(await shares.ownerComment(c.req.param("id"), await body(c))));
+me.post("/task-shares/:id/files", async (c) => c.json(await shares.ownerUpload(c.req.param("id"), await body(c))));
+me.post("/task-shares/:id/files/:f/done", async (c) =>
+  c.json(await shares.ownerConfirm(c.req.param("id"), c.req.param("f"))),
+);
+me.get("/task-shares/:id/files/:f", async (c) => c.json(await shares.ownerLink(c.req.param("id"), c.req.param("f"))));
 me.get("/keys", async (c) => c.json(await keys.myKeys()));
 me.post("/keys/setup", async (c) => c.json(await keys.setupKeys(await body(c))));
 me.post("/keys/password", async (c) => c.json(await keys.changePassword(await body(c))));

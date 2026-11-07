@@ -108,6 +108,49 @@ create table if not exists org_key (
   wrapped text not null,
   primary key ("organizationId", "userId")
 );
+-- Attachments in R2 (lib/r2.ts). enc: end-to-end encrypted by the browser (private tasks); readable otherwise
+-- (shared tasks, share_id). Unconfirmed uploads are pruned after a day.
+create table if not exists task_share (
+  id text primary key,
+  token text not null unique,
+  workspace text not null,
+  owner text not null references "user"(id) on delete cascade,
+  task jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists task_share_workspace on task_share (workspace);
+create table if not exists file (
+  id text primary key,
+  workspace text not null,
+  share_id text references task_share(id) on delete cascade,
+  key text not null,
+  name text not null,
+  type text not null,
+  size bigint not null,
+  enc boolean not null default false,
+  confirmed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists file_workspace on file (workspace);
+create index if not exists file_share on file (share_id);
+create table if not exists share_comment (
+  id bigserial primary key,
+  share_id text not null references task_share(id) on delete cascade,
+  parent_id bigint references share_comment(id) on delete cascade,
+  author_user text references "user"(id) on delete set null,
+  guest_no integer,
+  body text not null,
+  files jsonb not null default '[]',
+  created_at timestamptz not null default now()
+);
+create index if not exists share_comment_share on share_comment (share_id);
+create table if not exists share_guest (
+  share_id text not null references task_share(id) on delete cascade,
+  guest_key text not null,
+  no integer not null,
+  primary key (share_id, guest_key)
+);
 -- Server push reminders read task titles and times; with end-to-end encryption the app reminds instead.
 drop table if exists push_sent;
 drop table if exists push_sub;
