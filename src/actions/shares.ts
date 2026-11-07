@@ -42,6 +42,19 @@ async function mine(id: string) {
   return { share: rows[0], user };
 }
 
+// How many comments guests have left on each shared task the signed-in person can see: the app badges the new ones.
+export async function guestCounts() {
+  const { user } = await who();
+  const { rows } = await db.query<{ id: string; n: number }>(
+    `select s.id, count(c.id)::int as n from task_share s
+       join share_comment c on c.share_id = s.id and c.guest_no is not null
+      where s.workspace = 'u:' || $1 or s.workspace in (select 'o:' || "organizationId" from member where "userId" = $1)
+      group by s.id`,
+    [user],
+  );
+  return Object.fromEntries(rows.map((r) => [r.id, r.n]));
+}
+
 export async function createShare(task: unknown) {
   const { user, workspace } = await who();
   const t = copy(task);

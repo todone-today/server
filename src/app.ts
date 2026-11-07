@@ -158,6 +158,7 @@ me.post("/files/:id/done", async (c) => c.json(await files.confirmFile(c.req.par
 me.get("/files/:id", async (c) => c.json(await files.fileLink(c.req.param("id"))));
 me.delete("/files/:id", async (c) => c.json(await files.deleteFile(c.req.param("id"))));
 me.post("/task-shares", async (c) => c.json(await shares.createShare((await body(c)).task)));
+me.get("/task-shares", async (c) => c.json(await shares.guestCounts()));
 me.get("/task-shares/:id", async (c) => c.json(await shares.ownerView(c.req.param("id"))));
 me.put("/task-shares/:id", async (c) => {
   const b = await body(c);
