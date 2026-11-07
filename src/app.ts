@@ -120,12 +120,12 @@ me.use("*", csrf(origins.length ? { origin: origins } : undefined));
 me.get("/lists", async (c) => c.json(await lists.fetchLists()));
 me.post("/lists", async (c) => {
   const b = await body(c);
-  return c.json(await lists.createList(str(b.id), b.name, b.tasks, b.kind, b.data));
+  return c.json(await lists.createList(str(b.id), b.name, b.tasks, b.kind, b.data, b.icon));
 });
 me.put("/lists/order", async (c) => c.json(await lists.reorderLists((await body(c)).ids)));
 me.put("/lists/:id", async (c) => {
   const b = await body(c);
-  return c.json(await lists.saveList(c.req.param("id"), Number(b.version), b.name, b.tasks, b.data));
+  return c.json(await lists.saveList(c.req.param("id"), Number(b.version), b.name, b.tasks, b.data, b.icon));
 });
 me.delete("/lists/:id", async (c) => c.json(await lists.deleteList(c.req.param("id"))));
 me.post("/onboarding", async (c) => c.json(await lists.startOnboarding()));

@@ -3,7 +3,7 @@ import { MINE, who } from "../lib/access.ts";
 import { db } from "../lib/db.ts";
 import { notifyDiscord } from "../lib/notify.ts";
 import { autoSync } from "../lib/sync-all.ts";
-import { type List, type Task, validName, validTasks } from "@todone/sdk/tasks";
+import { type List, type Task, validIcon, validName, validTasks } from "@todone/sdk/tasks";
 
 type Row = {
   id: string;
@@ -14,6 +14,7 @@ type Row = {
   kind: string;
   position: number | null;
   data: string | null;
+  icon: string | null;
 };
 // A list as stored: `data` is its end-to-end encrypted name and tasks (the browser opens it); without `data` it's a
 // list its owner switched off encryption, in plain `name` and `tasks`.
@@ -27,17 +28,18 @@ const toList = (r: Row): Stored => ({
   ...(r.kind === "ideas" || r.kind === "bin" ? { kind: r.kind } : {}),
   ...(r.position !== null ? { position: r.position } : {}),
   ...(r.data ? { data: r.data } : {}),
+  ...(r.icon ? { icon: r.icon } : {}),
 });
-const COLS = `id, name, tasks, version, "updatedAt", kind, position, data`;
+const COLS = `id, name, tasks, version, "updatedAt", kind, position, data, icon`;
 // Ciphertext isn't parsed, only shaped and capped (the request body limit is 2 MB).
 const BLOB = /^v1\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/;
-function contents(name: unknown, tasks: unknown, data: unknown) {
+function contents(name: unknown, tasks: unknown, data: unknown, icon?: unknown) {
   if (data !== undefined && data !== null) {
     if (typeof data !== "string" || data.length > 1_900_000 || !BLOB.test(data)) throw bad("Invalid list");
-    return { name: "", tasks: "[]", data };
+    return { name: "", tasks: "[]", data, icon: null };
   }
-  if (typeof name !== "string" || !validName(name) || !validTasks(tasks)) throw bad("Invalid list");
-  return { name: name.trim(), tasks: JSON.stringify(tasks), data: null };
+  if (typeof name !== "string" || !validName(name) || !validTasks(tasks) || !validIcon(icon)) throw bad("Invalid list");
+  return { name: name.trim(), tasks: JSON.stringify(tasks), data: null, icon: (icon as string | undefined) ?? null };
 }
 // The lists of the active workspace: the user's own, or the active organization's.
 export async function fetchLists(): Promise<Stored[]> {
@@ -55,13 +57,14 @@ export async function createList(
   tasks: unknown,
   kind: unknown = "list",
   data?: unknown,
+  icon?: unknown,
 ): Promise<Stored> {
   const { user, org } = await who();
   if (!/^[\w-]{8,40}$/.test(id) || !["list", "ideas", "bin"].includes(kind as string)) throw bad("Invalid list");
-  const c = contents(name, tasks, data);
+  const c = contents(name, tasks, data, icon);
   const { rows } = await db.query<Row>(
-    `insert into list (id, "userId", "organizationId", name, tasks, kind, data) values ($1, $2, $3, $4, $5, $6, $7) returning ${COLS}`,
-    [id, org ? null : user, org, c.name, c.tasks, kind, c.data],
+    `insert into list (id, "userId", "organizationId", name, tasks, kind, data, icon) values ($1, $2, $3, $4, $5, $6, $7, $8) returning ${COLS}`,
+    [id, org ? null : user, org, c.name, c.tasks, kind, c.data, c.icon],
   );
   return toList(rows[0]);
 }
@@ -74,17 +77,18 @@ export async function saveList(
   name: unknown,
   tasks: unknown,
   data?: unknown,
+  icon?: unknown,
 ): Promise<{ ok: boolean; list: Stored | null }> {
   const { user } = await who();
-  const c = contents(name, tasks, data);
+  const c = contents(name, tasks, data, icon);
   // The CTE reads the row as it was before the update, for the team notification.
   const { rows } = await db.query<Row & { before: Task[]; workspace: string }>(
     `with old as (select tasks from list where id = $2)
-     update list set name = $4, tasks = $5, data = $6, version = version + 1, "updatedAt" = now()
+     update list set name = $4, tasks = $5, data = $6, icon = $7, version = version + 1, "updatedAt" = now()
      where id = $2 and version = $3 and ${MINE}
      returning ${COLS}, (select tasks from old) as before,
        coalesce('o:' || "organizationId", 'u:' || "userId") as workspace`,
-    [user, id, version, c.name, c.tasks, c.data],
+    [user, id, version, c.name, c.tasks, c.data, c.icon],
   );
   const r = rows[0];
   if (r) {

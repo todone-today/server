@@ -101,6 +101,8 @@ alter table list add column if not exists data text;
 -- A workspace's bin (recently deleted tasks, kept 7 days by the app) is a list of kind 'bin'.
 alter table list drop constraint if exists list_kind_check;
 alter table list add constraint list_kind_check check (kind in ('list', 'ideas', 'bin'));
+-- A plain list's icon (an encrypted list keeps its icon inside data).
+alter table list add column if not exists icon text;
 -- Each member's copy of their team's key, wrapped to their public key (user."publicKey").
 create table if not exists org_key (
   "organizationId" text not null references organization(id) on delete cascade,
