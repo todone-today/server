@@ -111,7 +111,7 @@ export async function thread(share: Share, viewer: { user?: string; guest?: numb
   return rows.map((c) => ({
     id: c.id,
     parent: c.parent_id,
-    who: c.guest_no ? `Guest ${c.guest_no}` : c.author_name || "Owner",
+    who: c.guest_no ? "Anonymous" : c.author_name || "Owner",
     guest: !!c.guest_no,
     mine: c.author_user ? c.author_user === viewer.user : c.guest_no === viewer.guest && !!viewer.guest,
     at: +c.created_at,
