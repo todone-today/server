@@ -153,6 +153,8 @@ create table if not exists share_guest (
   no integer not null,
   primary key (share_id, guest_key)
 );
+-- The name a guest chose for themselves (blank = "Anonymous"); self-declared, not checked.
+alter table share_guest add column if not exists name text;
 -- Server push reminders read task titles and times; with end-to-end encryption the app reminds instead.
 drop table if exists push_sent;
 drop table if exists push_sub;

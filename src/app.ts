@@ -92,6 +92,7 @@ app.post("/api/s/:token/comments", async (c) => {
   const share = await shares.byToken(c.req.param("token"));
   const b = await body(c);
   const guest = await shares.guestNo(share, c.req.header("x-guest"), true);
+  if ("name" in b) await shares.nameGuest(share, guest, b.name);
   return c.json(await shares.addComment(share, b, { guest }));
 });
 app.post("/api/s/:token/files", async (c) =>

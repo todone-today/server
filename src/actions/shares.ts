@@ -110,21 +110,24 @@ type Comment = {
   author_user: string | null;
   author_name: string | null;
   guest_no: number | null;
+  guest_name: string | null;
   body: string;
   files: unknown[];
   created_at: Date;
 };
 export async function thread(share: Share, viewer: { user?: string; guest?: number }) {
   const { rows } = await db.query<Comment>(
-    `select c.id::text, c.parent_id::text, c.author_user, u.name as author_name, c.guest_no, c.body, c.files, c.created_at
+    `select c.id::text, c.parent_id::text, c.author_user, u.name as author_name, c.guest_no, g.name as guest_name,
+            c.body, c.files, c.created_at
      from share_comment c left join "user" u on u.id = c.author_user
+       left join share_guest g on g.share_id = c.share_id and g.no = c.guest_no
      where c.share_id = $1 order by c.created_at`,
     [share.id],
   );
   return rows.map((c) => ({
     id: c.id,
     parent: c.parent_id,
-    who: c.guest_no ? "Anonymous" : c.author_name || "Owner",
+    who: c.guest_no ? c.guest_name || "Anonymous" : c.author_name || "Owner",
     guest: !!c.guest_no,
     mine: c.author_user ? c.author_user === viewer.user : c.guest_no === viewer.guest && !!viewer.guest,
     at: +c.created_at,
@@ -201,6 +204,12 @@ export async function guestNo(share: Share, key: unknown, make: boolean): Promis
     [share.id, key],
   );
   return rows[0]?.no ?? (await guestNo(share, key, false));
+}
+// A guest's chosen name for this share: one line, up to 40 characters; blank goes back to "Anonymous".
+export async function nameGuest(share: Share, no: number | undefined, name: unknown) {
+  if (no === undefined || (name !== undefined && typeof name !== "string")) return;
+  const clean = typeof name === "string" ? name.replace(/[\p{C}]/gu, "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+  await db.query(`update share_guest set name = $3 where share_id = $1 and no = $2`, [share.id, no, clean || null]);
 }
 export async function guestView(tok: string, key: unknown) {
   const share = await byToken(tok);
