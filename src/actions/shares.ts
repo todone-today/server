@@ -2,7 +2,8 @@
 // end-to-end encrypted: the browser sends a readable copy here, which guests see and comment on. The encrypted
 // original stays in its list. The token is the only key: rotating or revoking it ends access at once.
 import { randomBytes } from "node:crypto";
-import { ApiError, bad } from "../context.ts";
+import { ApiError, bad, later } from "../context.ts";
+import { pushNow } from "./push.ts";
 import { who } from "../lib/access.ts";
 import { db } from "../lib/db.ts";
 import { type Task, validTasks } from "@todone/sdk/tasks";
@@ -159,6 +160,18 @@ export async function addComment(share: Share, b: Record<string, unknown>, autho
     `insert into share_comment (share_id, parent_id, author_user, guest_no, body, files) values ($1, $2, $3, $4, $5, $6)`,
     [share.id, parent, author.user ?? null, author.guest ?? null, body, JSON.stringify(files)],
   );
+  // A guest wrote: tell whoever shared it, on their browsers with reminders on. Clicking opens the task.
+  if (author.guest !== undefined) {
+    const who = (typeof b.name === "string" && b.name.trim().slice(0, 40)) || "Anonymous";
+    later(() =>
+      pushNow(share.owner, {
+        title: `${who} on “${share.task.title.slice(0, 60)}”`,
+        body: body ? body.slice(0, 140) : `Added ${files.length === 1 ? "a file" : `${files.length} files`}`,
+        tag: `c:${share.id}`,
+        url: `/app?task=${encodeURIComponent(share.task.id)}`,
+      }),
+    );
+  }
 }
 
 async function shareFile(share: Share, fileId: string) {

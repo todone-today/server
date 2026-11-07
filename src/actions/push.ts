@@ -5,6 +5,7 @@ import { createPrivateKey, generateKeyPairSync, randomUUID, sign, type JsonWebKe
 import { bad, ApiError } from "../context.ts";
 import { who } from "../lib/access.ts";
 import { db } from "../lib/db.ts";
+import { seal } from "@todone/sdk/push";
 
 // Only the browsers' own push services: the server posts to these addresses, so nothing else may be one.
 const PUSH_HOST = /(^|\.)(fcm\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/;
@@ -134,6 +135,33 @@ async function vapidHeader(endpoint: string) {
   return `vapid t=${head}.${sig.toString("base64url")}, k=${pub}`;
 }
 
+// One sealed message to one browser's push service. A browser that's gone (notifications off, reset) is forgotten.
+async function deliver(device: { id: string; endpoint: string }, body: Uint8Array) {
+  const res = await fetch(device.endpoint, {
+    method: "POST",
+    headers: {
+      authorization: await vapidHeader(device.endpoint),
+      "content-encoding": "aes128gcm",
+      "content-type": "application/octet-stream",
+      ttl: "3600",
+      urgency: "high",
+    },
+    body: body as BodyInit,
+  }).catch((e) => (console.error("push", e), null));
+  if (res?.status === 404 || res?.status === 410) await db.query(`delete from push_device where id = $1`, [device.id]);
+  else if (res && !res.ok) console.error("push", res.status, await res.text().catch(() => ""));
+}
+
+// A notification about something the server can already read (a comment on a task shared by link), sealed here for
+// each of the person's browsers with reminders on. Encrypted lists never come through here.
+export async function pushNow(user: string, note: { title: string; body: string; tag: string; url: string }) {
+  const { rows } = await db.query<{ id: string; endpoint: string; p256dh: string; auth: string }>(
+    `select id, endpoint, p256dh, auth from push_device where user_id = $1`,
+    [user],
+  );
+  await Promise.all(rows.map(async (d) => deliver(d, await seal(d, JSON.stringify(note)))));
+}
+
 // Hands what's due to the push services. Taking a row deletes it, so two servers never send one twice.
 export async function sendDue() {
   const { rows } = await db.query<{ id: string; endpoint: string; body: Buffer; late: boolean }>(
@@ -144,22 +172,7 @@ export async function sendDue() {
   await Promise.all(
     rows
       .filter((r) => !r.late) // a reminder an hour late is noise (the server was down)
-      .map(async (r) => {
-        const res = await fetch(r.endpoint, {
-          method: "POST",
-          headers: {
-            authorization: await vapidHeader(r.endpoint),
-            "content-encoding": "aes128gcm",
-            "content-type": "application/octet-stream",
-            ttl: "3600",
-            urgency: "high",
-          },
-          body: new Uint8Array(r.body),
-        }).catch((e) => (console.error("push", e), null));
-        // Gone: the browser turned notifications off or was reset.
-        if (res?.status === 404 || res?.status === 410) await db.query(`delete from push_device where id = $1`, [r.id]);
-        else if (res && !res.ok) console.error("push", res.status, await res.text().catch(() => ""));
-      }),
+      .map((r) => deliver(r, new Uint8Array(r.body))),
   );
   return rows.length;
 }
