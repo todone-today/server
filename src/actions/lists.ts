@@ -25,7 +25,7 @@ const toList = (r: Row): Stored => ({
   tasks: r.tasks,
   version: r.version,
   updated: +r.updatedAt,
-  ...(r.kind === "ideas" || r.kind === "bin" ? { kind: r.kind } : {}),
+  ...(r.kind === "ideas" || r.kind === "bin" || r.kind === "goals" ? { kind: r.kind } : {}),
   ...(r.position !== null ? { position: r.position } : {}),
   ...(r.data ? { data: r.data } : {}),
   ...(r.icon ? { icon: r.icon } : {}),
@@ -60,7 +60,9 @@ export async function createList(
   icon?: unknown,
 ): Promise<Stored> {
   const { user, org } = await who();
-  if (!/^[\w-]{8,40}$/.test(id) || !["list", "ideas", "bin"].includes(kind as string)) throw bad("Invalid list");
+  if (!/^[\w-]{8,40}$/.test(id) || !["list", "ideas", "bin", "goals"].includes(kind as string)) throw bad("Invalid list");
+  // Goals, rewards and XP are only ever stored encrypted.
+  if (kind === "goals" && !data) throw bad("Invalid list");
   const c = contents(name, tasks, data, icon);
   const { rows } = await db.query<Row>(
     `insert into list (id, "userId", "organizationId", name, tasks, kind, data, icon) values ($1, $2, $3, $4, $5, $6, $7, $8) returning ${COLS}`,
@@ -85,7 +87,7 @@ export async function saveList(
   const { rows } = await db.query<Row & { before: Task[]; workspace: string }>(
     `with old as (select tasks from list where id = $2)
      update list set name = $4, tasks = $5, data = $6, icon = $7, version = version + 1, "updatedAt" = now()
-     where id = $2 and version = $3 and ${MINE}
+     where id = $2 and version = $3 and ${MINE} and (kind <> 'goals' or $6::text is not null)
      returning ${COLS}, (select tasks from old) as before,
        coalesce('o:' || "organizationId", 'u:' || "userId") as workspace`,
     [user, id, version, c.name, c.tasks, c.data, c.icon],
