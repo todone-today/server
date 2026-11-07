@@ -14,6 +14,7 @@ import * as integrations from "./actions/integrations.ts";
 import * as keys from "./actions/keys.ts";
 import * as files from "./actions/files.ts";
 import * as shares from "./actions/shares.ts";
+import * as push from "./actions/push.ts";
 import { hasFiles } from "./lib/r2.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
@@ -179,6 +180,13 @@ me.post("/keys/password", async (c) => c.json(await keys.changePassword(await bo
 me.post("/keys/recovery-key", async (c) => c.json(await keys.newRecoveryKey(await body(c))));
 me.get("/orgs/:id/keys", async (c) => c.json(await keys.teamKeys(c.req.param("id"))));
 me.put("/orgs/:id/keys", async (c) => c.json(await keys.giveTeamKeys(c.req.param("id"), (await body(c)).keys)));
+
+// Reminders with the app closed: this browser's push address, and the reminders the app sealed for it.
+me.get("/push/key", async (c) => c.json(await push.pushKey()));
+me.get("/push/devices", async (c) => c.json(await push.devices()));
+me.post("/push/devices", async (c) => c.json(await push.addDevice(await body(c))));
+me.delete("/push/devices", async (c) => c.json(await push.removeDevice((await body(c)).endpoint)));
+me.put("/push/devices/:id/notes", async (c) => c.json(await push.setNotes(c.req.param("id"), await body(c))));
 
 app.route("/api", me);
 app.notFound((c) => c.json({ error: "Not found" }, 404));

@@ -158,4 +158,28 @@ alter table share_guest add column if not exists name text;
 -- Server push reminders read task titles and times; with end-to-end encryption the app reminds instead.
 drop table if exists push_sent;
 drop table if exists push_sub;
+-- Reminders with the app closed, end to end: the app seals each one for a browser (Web Push encryption) and leaves
+-- it here with a send time. The server can't open them; it only forwards them to the browser's push service.
+create table if not exists push_device (
+  id text primary key,
+  user_id text not null references "user"(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create table if not exists push_note (
+  device_id text not null references push_device(id) on delete cascade,
+  workspace text not null,
+  send_at timestamptz not null,
+  body bytea not null
+);
+create index if not exists push_note_due on push_note (send_at);
+create index if not exists push_note_device on push_note (device_id, workspace);
+-- The server's own push identity (VAPID), made on first use so there's nothing to configure.
+create table if not exists push_vapid (
+  id integer primary key check (id = 1),
+  public_key text not null,
+  private_key jsonb not null
+);
 `;
