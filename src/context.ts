@@ -19,10 +19,12 @@ export function later(work: () => Promise<unknown>) {
 
 // An error the client should see, with its HTTP status; anything else is a 500.
 export class ApiError extends Error {
-  status: 400 | 401 | 403 | 404;
-  constructor(status: 400 | 401 | 403 | 404, message: string) {
+  status: 400 | 401 | 402 | 403 | 404;
+  constructor(status: 400 | 401 | 402 | 403 | 404, message: string) {
     super(message);
     this.status = status;
   }
 }
 export const bad = (message: string) => new ApiError(400, message);
+// Needs a paid plan: the app offers the plans (402 Payment Required).
+export const needsPlan = (message: string) => new ApiError(402, message);

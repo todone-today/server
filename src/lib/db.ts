@@ -182,4 +182,37 @@ create table if not exists push_vapid (
   public_key text not null,
   private_key jsonb not null
 );
+-- Paid plans through Razorpay (actions/billing.ts). A row per Razorpay subscription, or per Founding order
+-- (term 'founding'). paid_until: how far it's paid for; the plan counts until then (lib/plans.ts entitle).
+create table if not exists billing_sub (
+  id text primary key,
+  user_id text not null references "user"(id) on delete cascade,
+  plan text not null check (plan in ('plus', 'team')),
+  term text not null check (term in ('month', 'half', 'year', 'founding')),
+  seats integer not null default 1,
+  status text not null default 'created',
+  upfront integer not null default 0,
+  start_at timestamptz,
+  paid_until timestamptz,
+  cancel_at_end boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists billing_sub_user on billing_sub (user_id);
+-- Every charge, kept for receipts and tax records even after the account is deleted (hence the copied email).
+create sequence if not exists billing_invoice_seq;
+create table if not exists billing_payment (
+  id text primary key,
+  user_id text references "user"(id) on delete set null,
+  email text not null,
+  sub_id text,
+  amount integer not null,
+  refunded integer not null default 0,
+  what text not null,
+  invoice_no text not null unique,
+  created_at timestamptz not null default now()
+);
+create index if not exists billing_payment_user on billing_payment (user_id);
+-- Webhook deliveries already handled (Razorpay retries), and Razorpay plan ids made on first use.
+create table if not exists billing_event (id text primary key, at timestamptz not null default now());
+create table if not exists billing_plan (key text primary key, razorpay_id text not null);
 `;

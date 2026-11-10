@@ -1,4 +1,5 @@
-// What can be uploaded, how big, and how to tell a file really is what it claims (its first bytes).
+// What can be uploaded, how big, and how to tell a file really is what it claims (its first bytes). Images are capped
+// at 5 MB: the app shrinks photos before uploading (clients lib/files.ts shrink), so that is plenty.
 export const MB = 1024 * 1024;
 type Kind = { max: number; inline: boolean; magic: (b: Uint8Array) => boolean };
 
@@ -6,11 +7,11 @@ const ascii = (b: Uint8Array, at: number, s: string) => [...s].every((c, i) => b
 const ftyp = (b: Uint8Array, brands: string[]) => ascii(b, 4, "ftyp") && brands.some((x) => ascii(b, 8, x));
 
 export const TYPES: Record<string, Kind> = {
-  "image/jpeg": { max: 10 * MB, inline: true, magic: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  "image/png": { max: 10 * MB, inline: true, magic: (b) => ascii(b, 1, "PNG") && b[0] === 0x89 },
-  "image/gif": { max: 10 * MB, inline: true, magic: (b) => ascii(b, 0, "GIF8") },
-  "image/webp": { max: 10 * MB, inline: true, magic: (b) => ascii(b, 0, "RIFF") && ascii(b, 8, "WEBP") },
-  "image/heic": { max: 10 * MB, inline: false, magic: (b) => ftyp(b, ["heic", "heix", "mif1", "msf1", "heis"]) },
+  "image/jpeg": { max: 5 * MB, inline: true, magic: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  "image/png": { max: 5 * MB, inline: true, magic: (b) => ascii(b, 1, "PNG") && b[0] === 0x89 },
+  "image/gif": { max: 5 * MB, inline: true, magic: (b) => ascii(b, 0, "GIF8") },
+  "image/webp": { max: 5 * MB, inline: true, magic: (b) => ascii(b, 0, "RIFF") && ascii(b, 8, "WEBP") },
+  "image/heic": { max: 5 * MB, inline: false, magic: (b) => ftyp(b, ["heic", "heix", "mif1", "msf1", "heis"]) },
   "video/mp4": { max: 50 * MB, inline: true, magic: (b) => ascii(b, 4, "ftyp") },
   "video/quicktime": {
     max: 50 * MB,

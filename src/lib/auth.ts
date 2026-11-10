@@ -4,6 +4,7 @@ import { organization } from "better-auth/plugins";
 import { createHash } from "node:crypto";
 import { db } from "./db.ts";
 import { canEmail, sendEmail } from "./email.ts";
+import { mayInvite, mayMakeTeam, stopAll } from "../actions/billing.ts";
 
 // The Google account the Calendar integration links to (offline: so syncing works while you're away). Not a way to
 // make an account: with end-to-end encryption, only the password can open your lists.
@@ -85,6 +86,7 @@ export const auth = betterAuth({
             message: `You're the only owner of “${stuck.name}”. Make someone else an owner or delete the team first.`,
           });
         await dropSoloTeams(user.id);
+        await stopAll(user.id); // nothing renews for a deleted account
       },
       // Lists, sessions, memberships and push devices go with the user row; these are keyed by workspace.
       afterDelete: async (user) => dropWorkspace(`u:${user.id}`),
@@ -111,7 +113,10 @@ export const auth = betterAuth({
   // ponytail: no email service yet, so invitations are shared as a link the inviter copies.
   plugins: [
     organization({
+      // Teams come with Plus or Team (lib/plans.ts); without billing set up, anyone can make one.
+      allowUserToCreateOrganization: (user) => mayMakeTeam(user.id),
       organizationHooks: {
+        beforeCreateInvitation: async ({ organization: o, inviter }) => mayInvite(o.id, inviter.id),
         // A team's lists go with it (foreign keys); its integration secrets and links must go too.
         afterDeleteOrganization: async ({ organization: o }) => {
           const ws = `o:${o.id}`;

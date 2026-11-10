@@ -2,6 +2,7 @@ import { bad, later, requestHeaders } from "../context.ts";
 import { MINE, who } from "../lib/access.ts";
 import { db } from "../lib/db.ts";
 import { notifyDiscord } from "../lib/notify.ts";
+import { mayAddList } from "./billing.ts";
 import { autoSync } from "../lib/sync-all.ts";
 import { type List, type Task, validIcon, validName, validTasks } from "@todone/sdk/tasks";
 
@@ -64,6 +65,7 @@ export async function createList(
   // Goals, rewards and XP are only ever stored encrypted.
   if (kind === "goals" && !data) throw bad("Invalid list");
   const c = contents(name, tasks, data, icon);
+  await mayAddList(user, org, kind);
   const { rows } = await db.query<Row>(
     `insert into list (id, "userId", "organizationId", name, tasks, kind, data, icon) values ($1, $2, $3, $4, $5, $6, $7, $8) returning ${COLS}`,
     [id, org ? null : user, org, c.name, c.tasks, kind, c.data, c.icon],

@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { ApiError, bad, later } from "../context.ts";
 import { pushNow } from "./push.ts";
 import { who } from "../lib/access.ts";
+import { mayShare } from "./billing.ts";
 import { db } from "../lib/db.ts";
 import { type Task, validTasks } from "@todone/sdk/tasks";
 import { type FileRow, confirm, dropFiles, link, newFile } from "./files.ts";
@@ -58,7 +59,8 @@ export async function guestCounts() {
 }
 
 export async function createShare(task: unknown) {
-  const { user, workspace } = await who();
+  const { user, org, workspace } = await who();
+  await mayShare(user, org);
   const t = copy(task);
   const id = crypto.randomUUID();
   const tok = token();

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { ApiError } from "../context.ts";
 import { who } from "../lib/access.ts";
+import { mayShare } from "./billing.ts";
 import { hasGoogle } from "../lib/auth.ts";
 import { db } from "../lib/db.ts";
 import { createCalendar } from "../lib/google.ts";
@@ -139,6 +140,7 @@ export async function syncNow(): Promise<string> {
 export async function shareCalendar(view: unknown, at: unknown): Promise<{ token: string } | { error: string }> {
   const w = await who();
   if (!w.manager) return { error: "Ask a team owner or admin to share the calendar." };
+  await mayShare(w.user, w.org);
   if (!VIEWS.includes(view as CalView) || typeof at !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(at))
     return { error: "That view can't be shared." };
   const token = randomBytes(24).toString("base64url");

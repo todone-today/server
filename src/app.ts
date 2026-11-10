@@ -15,6 +15,7 @@ import * as keys from "./actions/keys.ts";
 import * as files from "./actions/files.ts";
 import * as shares from "./actions/shares.ts";
 import * as push from "./actions/push.ts";
+import * as billing from "./actions/billing.ts";
 import { hasFiles } from "./lib/r2.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
@@ -86,6 +87,10 @@ app.get("/api/sync/:token", (c) => syncedLists(c.req.param("token")));
 app.get("/api/sync/:token/:list", (c) => getList(c.req.param("token"), c.req.param("list")));
 app.put("/api/sync/:token/:list", (c) => putList(c.req.raw, c.req.param("token"), c.req.param("list")));
 app.get("/api/cron/notify", (c) => cron(c.req.raw));
+// Razorpay's webhooks: signed with the webhook secret over the raw body, so no session or CSRF check.
+app.post("/api/billing/webhook", async (c) =>
+  c.json(await billing.webhook(await c.req.text(), c.req.header("x-razorpay-signature"), c.req.header("x-razorpay-event-id"))),
+);
 // Before signing in, and forgot-password: how to derive keys, and the recovery-key reset (token-guarded).
 // A shared task's link (no account): the token is the key. The guest's random browser key comes in x-guest.
 app.get("/api/s/:token", async (c) => c.json(await shares.guestView(c.req.param("token"), c.req.header("x-guest"))));
@@ -187,6 +192,16 @@ me.get("/push/devices", async (c) => c.json(await push.devices()));
 me.post("/push/devices", async (c) => c.json(await push.addDevice(await body(c))));
 me.delete("/push/devices", async (c) => c.json(await push.removeDevice((await body(c)).endpoint)));
 me.put("/push/devices/:id/notes", async (c) => c.json(await push.setNotes(c.req.param("id"), await body(c))));
+
+// Plans and payments (actions/billing.ts).
+me.get("/billing", async (c) => c.json(await billing.status()));
+me.post("/billing/quote", async (c) => c.json(await billing.quote(await body(c))));
+me.post("/billing/checkout", async (c) => c.json(await billing.checkout(await body(c))));
+me.post("/billing/founding", async (c) => c.json(await billing.founding()));
+me.post("/billing/confirm", async (c) => c.json(await billing.confirm(await body(c))));
+me.post("/billing/cancel", async (c) => c.json(await billing.cancel()));
+me.post("/billing/refund", async (c) => c.json(await billing.refund()));
+me.get("/billing/receipts/:id", async (c) => c.json(await billing.receipt(c.req.param("id"))));
 
 app.route("/api", me);
 app.notFound((c) => c.json({ error: "Not found" }, 404));
