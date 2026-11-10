@@ -42,6 +42,14 @@ services:
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_BUCKET: ${R2_BUCKET:-todone-files}
+      # Paid plans (actions/billing.ts): off unless both keys and BILLING_START are set.
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      BILLING_START: ${BILLING_START:-}
+      BILLING_NAME: ${BILLING_NAME:-}
+      BILLING_ADDRESS: ${BILLING_ADDRESS:-}
+      BILLING_GSTIN: ${BILLING_GSTIN:-}
     volumes:
       - data:/data
     depends_on:
