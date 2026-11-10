@@ -154,7 +154,9 @@ async function dropSoloTeams(userId: string) {
 export async function purgeUnverified(): Promise<number> {
   if (!canEmail) return 0;
   const { rows } = await db.query<{ id: string }>(
-    `select id from "user" where "emailVerified" = false and "createdAt" < now() - interval '7 days'`,
+    // Someone who has paid is never cleaned up, confirmed email or not.
+    `select id from "user" u where "emailVerified" = false and "createdAt" < now() - interval '7 days'
+       and not exists (select 1 from billing_payment p where p.user_id = u.id)`,
   );
   for (const { id } of rows) {
     await dropSoloTeams(id);
