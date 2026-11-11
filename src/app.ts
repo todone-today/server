@@ -137,6 +137,7 @@ me.put("/lists/:id", async (c) => {
 me.delete("/lists/:id", async (c) => c.json(await lists.deleteList(c.req.param("id"))));
 me.post("/onboarding", async (c) => c.json(await lists.startOnboarding()));
 me.get("/export", async (c) => c.json(await lists.exportData()));
+me.post("/feedback/take", async (c) => c.json(await lists.takeFeedback()));
 me.post("/feedback", async (c) => {
   const b = await body(c);
   return c.json(await lists.sendFeedback(str(b.kind), str(b.body), str(b.page)));

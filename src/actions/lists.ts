@@ -158,6 +158,27 @@ export async function exportData() {
 
 const KINDS = ["bug", "idea", "other"];
 
+// Feedback as tickets: the maintainer's account (FEEDBACK_TO, a confirmed email) takes what's new, and its app files
+// each into a list as a task, since lists are end-to-end encrypted and the server can't write into them. Anyone
+// else gets nothing. Taken once: two of the maintainer's tabs never file the same thing twice.
+// ponytail: if the app closes between taking and filing, those few are lost from the lists (still in the table).
+const MAINTAINER = (process.env.FEEDBACK_TO ?? "").trim().toLowerCase();
+export async function takeFeedback() {
+  const { user } = await who();
+  if (!MAINTAINER) return [];
+  const me = await db.query<{ ok: boolean }>(
+    `select lower(email) = $2 and "emailVerified" as ok from "user" where id = $1`,
+    [user, MAINTAINER],
+  );
+  if (!me.rows[0]?.ok) return [];
+  const { rows } = await db.query(
+    `update feedback f set "takenAt" = now() from "user" u
+      where f."takenAt" is null and u.id = f."userId"
+      returning f.id::text, f.kind, f.body, f.page, f."createdAt", u.email, u.name`,
+  );
+  return rows;
+}
+
 export async function sendFeedback(kind: string, body: string, page: string) {
   const { user } = await who();
   const text = String(body).trim();

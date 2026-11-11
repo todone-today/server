@@ -76,6 +76,8 @@ create table if not exists feedback (
   agent text,
   "createdAt" timestamptz not null default now()
 );
+-- When the maintainer's app took it, to file it as a task (feedback.ts); null until then.
+alter table feedback add column if not exists "takenAt" timestamptz;
 -- Shared calendar views: each link shows one view (day, week, month or year) around one date, nothing else.
 create table if not exists calendar_share (
   token text primary key,

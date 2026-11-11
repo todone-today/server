@@ -39,6 +39,7 @@ services:
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
       CRON_SECRET: ${CRON_SECRET:-}
+      FEEDBACK_TO: ${FEEDBACK_TO:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-todone <hello@todone.today>}
       SENTRY_DSN: ${SENTRY_DSN:-}
