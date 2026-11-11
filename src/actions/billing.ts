@@ -201,9 +201,11 @@ function plan(to: { plan: Paid; term: Term; seats: number }, subs: Sub[], p: Per
   };
 }
 
-// A Razorpay plan per plan, term and price, made the first time it's needed.
+// A Razorpay plan per plan, term and price, made the first time it's needed. Plans belong to one Razorpay account
+// and mode, so the key id is part of the name: new keys (test to live) make their own plans instead of reusing ids
+// the new account has never seen ("The ID provided is invalid").
 async function razorpayPlan(p: Paid, term: Term) {
-  const key = `${p}-${term}-${PRICE[p][term]}`;
+  const key = `${process.env.RAZORPAY_KEY_ID}:${p}-${term}-${PRICE[p][term]}`;
   const got = await db.query<{ razorpay_id: string }>(`select razorpay_id from billing_plan where key = $1`, [key]);
   if (got.rows[0]) return got.rows[0].razorpay_id;
   const made = await rzp<{ id: string }>("POST", "/plans", {
