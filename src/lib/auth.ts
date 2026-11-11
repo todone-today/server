@@ -6,19 +6,28 @@ import { db } from "./db.ts";
 import { canEmail, sendEmail } from "./email.ts";
 import { mayInvite, mayMakeTeam, stopAll } from "../actions/billing.ts";
 
-// The Google account the Calendar integration links to (offline: so syncing works while you're away). Not a way to
-// make an account: with end-to-end encryption, only the password can open your lists.
+// Sign in with Google, GitHub or Discord (each on when its keys are set). Signing in only proves who you are: your
+// lists are unlocked by an unlock passphrase you choose once (or your password, for accounts that have one), which
+// never leaves your device (actions/keys.ts initKeys). Google also links Google Calendar (offline, for syncing).
+const env = (k: string) => process.env[k] || "";
 const google =
-  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+  env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET")
     ? {
         google: {
-          clientId: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          clientId: env("GOOGLE_CLIENT_ID"),
+          clientSecret: env("GOOGLE_CLIENT_SECRET"),
           accessType: "offline" as const,
           prompt: "select_account consent" as const,
-          disableSignUp: true,
         },
       }
+    : undefined;
+const github =
+  env("GITHUB_CLIENT_ID") && env("GITHUB_CLIENT_SECRET")
+    ? { github: { clientId: env("GITHUB_CLIENT_ID"), clientSecret: env("GITHUB_CLIENT_SECRET") } }
+    : undefined;
+const discord =
+  env("DISCORD_CLIENT_ID") && env("DISCORD_CLIENT_SECRET")
+    ? { discord: { clientId: env("DISCORD_CLIENT_ID"), clientSecret: env("DISCORD_CLIENT_SECRET") } }
     : undefined;
 
 // Reads BETTER_AUTH_SECRET and BETTER_AUTH_URL from the environment.
@@ -92,7 +101,7 @@ export const auth = betterAuth({
       afterDelete: async (user) => dropWorkspace(`u:${user.id}`),
     },
   },
-  socialProviders: { ...google },
+  socialProviders: { ...google, ...github, ...discord },
   // Slows down password guessing and email flooding. Counted in the database so every server instance agrees.
   rateLimit: {
     enabled: true,
@@ -109,7 +118,10 @@ export const auth = betterAuth({
     },
   },
   // A calendar can live on a Google account with a different email than the todone login.
-  account: { accountLinking: { allowDifferentEmails: true } },
+  // The same email is the same person: signing in with Google or GitHub (which vouch for the email) joins the
+  // account that already has it; Discord joins only when its email is verified there. Google Calendar may link a
+  // Google account with a different email.
+  account: { accountLinking: { enabled: true, trustedProviders: ["google", "github"], allowDifferentEmails: true } },
   // ponytail: no email service yet, so invitations are shared as a link the inviter copies.
   plugins: [
     organization({
@@ -173,6 +185,7 @@ async function dropWorkspace(ws: string, orgId?: string) {
   if (orgId) await db.query(`delete from organization where id = $1`, [orgId]);
 }
 
-export const hasGithub = false;
+export const hasGithub = !!github;
+export const hasDiscord = !!discord;
 export const verifiesEmail = canEmail;
 export const hasGoogle = !!google;

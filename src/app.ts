@@ -6,7 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { ApiError, later, request } from "./context.ts";
 import { clientIp, hit, pruneRateLimits, ruleFor } from "./lib/rate-limit.ts";
-import { auth, hasGithub, hasGoogle, purgeUnverified, verifiesEmail } from "./lib/auth.ts";
+import { auth, hasDiscord, hasGithub, hasGoogle, purgeUnverified, verifiesEmail } from "./lib/auth.ts";
 import { db as pool } from "./lib/db.ts";
 import { demoLists } from "./lib/demo.ts";
 import * as lists from "./actions/lists.ts";
@@ -60,7 +60,7 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
   if (c.req.path === "/api/auth/sign-up/email") later(() => Promise.all([purgeUnverified(), pruneRateLimits()]));
   return auth.handler(c.req.raw);
 });
-app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, verifiesEmail, files: hasFiles }));
+app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, discord: hasDiscord, verifiesEmail, files: hasFiles }));
 // The sample lists for the demo at /demo, dated from the visitor's today. Nothing is stored.
 app.get("/api/demo", (c) => {
   const q = c.req.query("today") ?? "";
@@ -181,6 +181,8 @@ me.post("/task-shares/:id/files/:f/done", async (c) =>
 me.get("/task-shares/:id/files/:f", async (c) => c.json(await shares.ownerLink(c.req.param("id"), c.req.param("f"))));
 me.get("/keys", async (c) => c.json(await keys.myKeys()));
 me.post("/keys/setup", async (c) => c.json(await keys.setupKeys(await body(c))));
+me.post("/keys/init", async (c) => c.json(await keys.initKeys(await body(c))));
+me.post("/keys/passphrase", async (c) => c.json(await keys.setPassphrase(await body(c))));
 me.post("/keys/password", async (c) => c.json(await keys.changePassword(await body(c))));
 me.post("/keys/recovery-key", async (c) => c.json(await keys.newRecoveryKey(await body(c))));
 me.get("/orgs/:id/keys", async (c) => c.json(await keys.teamKeys(c.req.param("id"))));

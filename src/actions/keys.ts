@@ -129,7 +129,46 @@ export async function myKeys() {
      where k."userId" = $1`,
     [s.user.id],
   );
-  return { ...rows[0], teamKeys: Object.fromEntries(teams.rows.map((r) => [r.organizationId, r.wrapped])) };
+  return {
+    ...rows[0],
+    hasPassword: await hasPassword(s.user.id),
+    teamKeys: Object.fromEntries(teams.rows.map((r) => [r.organizationId, r.wrapped])),
+  };
+}
+
+const hasPassword = (userId: string) =>
+  db
+    .query(`select 1 from account where "userId" = $1 and "providerId" = 'credential' and password is not null`, [userId])
+    .then((r) => !!r.rowCount);
+
+// Signed in with Google, GitHub or Discord for the first time: keys made in the browser from an unlock passphrase
+// the person chose. Only for an account with no keys and no password (password accounts set theirs up with the
+// password, setupKeys); never replaces keys that exist.
+export async function initKeys(b: Record<string, unknown>) {
+  const s = await session();
+  if (await hasPassword(s.user.id)) throw bad("Sign in with your password once to finish setting up.");
+  const k = keysFrom(b);
+  const { rowCount } = await db.query(`update "user" set ${SET_KEYS} where id = $1 and "kdfSalt" is null`, [
+    s.user.id,
+    ...keyArgs(k),
+  ]);
+  if (!rowCount) throw bad("This account's keys are already set up.");
+}
+
+// A new unlock passphrase for an account without a password (after unlocking with the old one or the recovery
+// key): the same account key, wrapped again. There's no password to check, so it needs a fresh sign-in, and only
+// the passphrase wrapping changes: the recovery key keeps working whatever is sent.
+const FRESH = 15 * 60_000;
+export async function setPassphrase(b: Record<string, unknown>) {
+  const s = await session();
+  if (await hasPassword(s.user.id)) throw bad("Change your password instead.");
+  if (Date.now() - +new Date(s.session.createdAt) > FRESH)
+    throw new ApiError(403, "For safety, sign out and in again, then change it within 15 minutes.");
+  const k = keysFrom(b, ["kdfSalt", "kdfIter", "wrappedKey"]);
+  await db.query(
+    `update "user" set "kdfSalt" = $2, "kdfIter" = $3, "wrappedKey" = $4, "updatedAt" = now() where id = $1 and "kdfSalt" is not null`,
+    [s.user.id, k.kdfSalt, k.kdfIter, k.wrappedKey],
+  );
 }
 
 // An account from before encryption: prove the old password once, then the hash and keys replace it together.
