@@ -200,6 +200,8 @@ create table if not exists billing_sub (
   created_at timestamptz not null default now()
 );
 create index if not exists billing_sub_user on billing_sub (user_id);
+-- Bought at the launch price (one of the first LAUNCH_SPOTS).
+alter table billing_sub add column if not exists intro boolean not null default false;
 -- Every charge, kept for receipts and tax records even after the account is deleted (hence the copied email).
 create sequence if not exists billing_invoice_seq;
 create table if not exists billing_payment (

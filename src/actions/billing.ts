@@ -15,6 +15,7 @@ import {
   FOUNDING,
   FREE_LISTS,
   INTRO,
+  LAUNCH_SPOTS,
   MAX_SEATS,
   MONTHS,
   PLUS_PEOPLE,
@@ -120,6 +121,18 @@ export async function mayInvite(org: string, inviter: string) {
     });
 }
 
+// ---- The launch price: the first LAUNCH_SPOTS paid purchases ----
+
+// Spots left: purchases at the launch price that were paid and not refunded (one per person) count as taken.
+// ponytail: two people paying for the last spot at the same moment can both get it; fine at 100, lock if it matters.
+export async function launchLeft() {
+  const { rows } = await db.query<{ n: number }>(
+    `select count(distinct user_id)::int as n from billing_sub where intro and paid_until is not null and status <> 'refunded'`,
+  );
+  return Math.max(0, LAUNCH_SPOTS - (rows[0]?.n ?? 0));
+}
+export const launch = async () => ({ left: await launchLeft(), total: LAUNCH_SPOTS });
+
 // ---- What someone sees in Account → Plan ----
 
 export async function status() {
@@ -132,6 +145,7 @@ export async function status() {
     [user],
   );
   const refundable = payments.find((x) => !x.refunded && now - +x.created_at < REFUND_DAYS * DAY);
+  const left = await launchLeft();
   // What renews: the paid-for subscription that isn't cancelled, else one scheduled to start later.
   const live = subs.filter((s) => s.term !== "founding" && !s.cancel_at_end && ["active", "authenticated"].includes(s.status));
   const next = live.find((s) => s !== e.sub && s.start_at && +s.start_at > now);
@@ -149,7 +163,8 @@ export async function status() {
       renews: live.includes(e.sub as (typeof live)[number]),
     },
     next: next && { plan: next.plan, term: next.term, seats: next.seats, from: next.start_at },
-    intro: !payments.length,
+    intro: !payments.length && left > 0,
+    launch: { left, total: LAUNCH_SPOTS },
     usage: { lists, listLimit: e.level === "free" ? FREE_LISTS : null, people, peopleLimit: Number.isFinite(peopleLimit(e.level, e.seats)) ? peopleLimit(e.level, e.seats) : null },
     prices: { price: PRICE, intro: INTRO, founding: FOUNDING.amount, months: MONTHS },
     payments,
@@ -161,8 +176,8 @@ export async function status() {
 export async function quote(b: Record<string, unknown>) {
   const { user } = await who();
   const to = choice(b);
-  const [p, subs] = await Promise.all([person(user), subsOf(user), enoughSeats(user, to)]);
-  return plan(to, subs, p, Date.now());
+  const [p, subs, left] = await Promise.all([person(user), subsOf(user), launchLeft(), enoughSeats(user, to)]);
+  return plan(to, subs, p, Date.now(), left);
 }
 
 // Team needs a seat for everyone already in your teams (and invited), you included.
@@ -181,7 +196,7 @@ function choice(b: Record<string, unknown>) {
 }
 
 // How a purchase works out: when the new subscription starts, and what's paid now.
-function plan(to: { plan: Paid; term: Term; seats: number }, subs: Sub[], p: Person, now: number) {
+function plan(to: { plan: Paid; term: Term; seats: number }, subs: Sub[], p: Person, now: number, left: number) {
   const cur = entitle(subs, now, p.createdAt).sub;
   const paidAhead = cur?.paid_until && +cur.paid_until > now ? cur : null;
   if (paidAhead) {
@@ -191,7 +206,7 @@ function plan(to: { plan: Paid; term: Term; seats: number }, subs: Sub[], p: Per
     return { ...to, upfront: now$, startAt: +paidAhead.paid_until!, upgrade: now$ > 0, intro: false };
   }
   const first = !subs.some((s) => s.paid_until);
-  const intro = first ? INTRO[to.plan][to.term] : undefined;
+  const intro = first && left > 0 ? INTRO[to.plan][to.term] : undefined;
   return {
     ...to,
     upfront: (intro ?? PRICE[to.plan][to.term]) * to.seats,
@@ -227,7 +242,7 @@ export async function checkout(b: Record<string, unknown>) {
   await enoughSeats(user, to);
   await dropUnpaid(user);
   const subs = await subsOf(user);
-  const q = plan(to, subs, p, Date.now());
+  const q = plan(to, subs, p, Date.now(), await launchLeft());
   const s = await rzp<{ id: string }>("POST", "/subscriptions", {
     plan_id: await razorpayPlan(to.plan, to.term),
     quantity: to.seats,
@@ -240,8 +255,8 @@ export async function checkout(b: Record<string, unknown>) {
     notes: { user, plan: to.plan, term: to.term, seats: String(to.seats) },
   });
   await db.query(
-    `insert into billing_sub (id, user_id, plan, term, seats, upfront, start_at) values ($1, $2, $3, $4, $5, $6, to_timestamp($7))`,
-    [s.id, user, to.plan, to.term, to.seats, q.upfront, q.startAt / 1000],
+    `insert into billing_sub (id, user_id, plan, term, seats, upfront, start_at, intro) values ($1, $2, $3, $4, $5, $6, to_timestamp($7), $8)`,
+    [s.id, user, to.plan, to.term, to.seats, q.upfront, q.startAt / 1000, q.intro],
   );
   return { key: keyId, subscription: s.id, amount: q.upfront, startAt: q.startAt, name: p.name, email: p.email, what: label(to) };
 }

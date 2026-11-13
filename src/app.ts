@@ -18,6 +18,7 @@ import * as push from "./actions/push.ts";
 import * as billing from "./actions/billing.ts";
 import * as ai from "./actions/ai.ts";
 import { hasAi } from "./lib/gemini.ts";
+import { billingOn } from "./lib/plans.ts";
 import { hasFiles } from "./lib/r2.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
@@ -62,7 +63,17 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
   if (c.req.path === "/api/auth/sign-up/email") later(() => Promise.all([purgeUnverified(), pruneRateLimits()]));
   return auth.handler(c.req.raw);
 });
-app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, discord: hasDiscord, verifiesEmail, files: hasFiles, ai: hasAi }));
+app.get("/api/config", async (c) =>
+  c.json({
+    github: hasGithub,
+    google: hasGoogle,
+    discord: hasDiscord,
+    verifiesEmail,
+    files: hasFiles,
+    ai: hasAi,
+    ...(billingOn ? { launch: await billing.launch() } : {}), // launch-price spots left, for the pricing cards
+  }),
+);
 // The sample lists for the demo at /demo, dated from the visitor's today. Nothing is stored.
 app.get("/api/demo", (c) => {
   const q = c.req.query("today") ?? "";

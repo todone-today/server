@@ -11,7 +11,9 @@ export const PRICE: Record<Paid, Record<Term, number>> = {
   plus: { month: 9_900, half: 49_900, year: 89_900 },
   team: { month: 14_900, half: 79_900, year: 1_49_900 }, // a seat
 };
-// The launch price, for someone's first paid term only; it renews at PRICE.
+// The launch price, for someone's first paid term only; it renews at PRICE. Only the first LAUNCH_SPOTS paid
+// purchases (Plus and Team together) get it; after that, checkout charges PRICE.
+export const LAUNCH_SPOTS = 100;
 export const INTRO: Record<Paid, Partial<Record<Term, number>>> = {
   plus: { half: 34_900, year: 59_900 },
   team: { half: 54_900, year: 99_900 },
