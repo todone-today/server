@@ -45,7 +45,8 @@ export async function hit(rule: Rule, who: string): Promise<number | null> {
      on conflict (key, "window") do update set count = rate_limit.count + 1 returning count`,
     [`${rule.name}:${who}`, window],
   );
-  return rows[0].count > rule.max ? window + rule.seconds - now : null;
+  // No row back (seen with the local PGlite server under concurrent requests): let it through rather than fail with 500.
+  return (rows[0]?.count ?? 0) > rule.max ? window + rule.seconds - now : null;
 }
 
 // Old windows are useless; the cron job and the sign-up clean-up sweep them.

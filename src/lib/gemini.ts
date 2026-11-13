@@ -18,7 +18,8 @@ export async function generate(system: string, text: string, fallback = false) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts: [{ text }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+      // It thinks first (what are the real tasks, how urgent, how big); thinking is billed as output.
+      generationConfig: { temperature: 0.2, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "medium" } },
     }),
     signal: AbortSignal.timeout(25_000),
   }).catch((e) => {
@@ -27,7 +28,7 @@ export async function generate(system: string, text: string, fallback = false) {
   });
   const data = (await r.json().catch(() => ({}))) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
-    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
     error?: { message?: string };
   };
   if (!r.ok) {
@@ -37,6 +38,6 @@ export async function generate(system: string, text: string, fallback = false) {
   return {
     text: (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join(""),
     tokensIn: data.usageMetadata?.promptTokenCount ?? 0,
-    tokensOut: data.usageMetadata?.candidatesTokenCount ?? 0,
+    tokensOut: (data.usageMetadata?.candidatesTokenCount ?? 0) + (data.usageMetadata?.thoughtsTokenCount ?? 0),
   };
 }
