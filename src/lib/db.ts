@@ -217,4 +217,29 @@ create index if not exists billing_payment_user on billing_payment (user_id);
 -- Webhook deliveries already handled (Razorpay retries), and Razorpay plan ids made on first use.
 create table if not exists billing_event (id text primary key, at timestamptz not null default now());
 create table if not exists billing_plan (key text primary key, razorpay_id text not null);
+-- Ask todone (actions/ai.ts): a recording waiting for the transcriber, then its words and the AI's answer until it's
+-- reviewed. The audio is cleared as soon as it's transcribed; rows go after an hour.
+create table if not exists ai_job (
+  id text primary key,
+  user_id text not null references "user"(id) on delete cascade,
+  status text not null default 'queued',
+  audio bytea,
+  audio_type text,
+  context jsonb not null default '{}',
+  transcript text,
+  result text,
+  error text,
+  lease_until timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists ai_job_waiting on ai_job (created_at) where audio is not null;
+-- AI requests a month per person, for the soft limit, and tokens, to watch the cost.
+create table if not exists ai_usage (
+  user_id text not null references "user"(id) on delete cascade,
+  month text not null,
+  n integer not null default 0,
+  tokens_in bigint not null default 0,
+  tokens_out bigint not null default 0,
+  primary key (user_id, month)
+);
 `;

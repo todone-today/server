@@ -16,6 +16,8 @@ import * as files from "./actions/files.ts";
 import * as shares from "./actions/shares.ts";
 import * as push from "./actions/push.ts";
 import * as billing from "./actions/billing.ts";
+import * as ai from "./actions/ai.ts";
+import { hasAi } from "./lib/gemini.ts";
 import { hasFiles } from "./lib/r2.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
@@ -60,7 +62,7 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
   if (c.req.path === "/api/auth/sign-up/email") later(() => Promise.all([purgeUnverified(), pruneRateLimits()]));
   return auth.handler(c.req.raw);
 });
-app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, discord: hasDiscord, verifiesEmail, files: hasFiles }));
+app.get("/api/config", (c) => c.json({ github: hasGithub, google: hasGoogle, discord: hasDiscord, verifiesEmail, files: hasFiles, ai: hasAi }));
 // The sample lists for the demo at /demo, dated from the visitor's today. Nothing is stored.
 app.get("/api/demo", (c) => {
   const q = c.req.query("today") ?? "";
@@ -91,6 +93,16 @@ app.get("/api/cron/notify", (c) => cron(c.req.raw));
 app.post("/api/billing/webhook", async (c) =>
   c.json(await billing.webhook(await c.req.text(), c.req.header("x-razorpay-signature"), c.req.header("x-razorpay-event-id"))),
 );
+// Ask todone's transcriber (worker/): its own token, polled every few seconds, so no session, CSRF or rate limit.
+const worker = new Hono();
+worker.use("*", async (c, next) => (ai.workerOk(c.req.header("authorization")) ? next() : c.json({ error: "Unauthorized" }, 401)));
+worker.post("/claim", async (c) => {
+  const j = await ai.claim();
+  return j ? c.json(j) : c.body(null, 204);
+});
+worker.post("/jobs/:id", async (c) => c.json(await ai.transcribed(c.req.param("id"), await body(c))));
+worker.post("/jobs/:id/fail", async (c) => c.json(await ai.failed(c.req.param("id"), await body(c))));
+app.route("/api/ai/worker", worker);
 // Before signing in, and forgot-password: how to derive keys, and the recovery-key reset (token-guarded).
 // A shared task's link (no account): the token is the key. The guest's random browser key comes in x-guest.
 app.get("/api/s/:token", async (c) => c.json(await shares.guestView(c.req.param("token"), c.req.header("x-guest"))));
@@ -195,6 +207,15 @@ me.get("/push/devices", async (c) => c.json(await push.devices()));
 me.post("/push/devices", async (c) => c.json(await push.addDevice(await body(c))));
 me.delete("/push/devices", async (c) => c.json(await push.removeDevice((await body(c)).endpoint)));
 me.put("/push/devices/:id/notes", async (c) => c.json(await push.setNotes(c.req.param("id"), await body(c))));
+
+// Ask todone (actions/ai.ts): typed words answer straight away; a recording becomes a job to poll.
+me.post("/ai/text", async (c) => c.json(await ai.askText(await body(c))));
+me.post("/ai/voice", async (c) =>
+  c.json(await ai.askVoice(await c.req.arrayBuffer(), c.req.header("content-type") ?? "", c.req.header("x-context"))),
+);
+me.get("/ai/jobs/:id", async (c) => c.json(await ai.job(c.req.param("id"))));
+me.delete("/ai/jobs/:id", async (c) => c.json(await ai.dropJob(c.req.param("id"))));
+me.get("/ai/usage", async (c) => c.json(await ai.myUsage()));
 
 // Plans and payments (actions/billing.ts).
 me.get("/billing", async (c) => c.json(await billing.status()));

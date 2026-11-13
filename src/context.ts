@@ -19,8 +19,8 @@ export function later(work: () => Promise<unknown>) {
 
 // An error the client should see, with its HTTP status; anything else is a 500.
 export class ApiError extends Error {
-  status: 400 | 401 | 402 | 403 | 404;
-  constructor(status: 400 | 401 | 402 | 403 | 404, message: string) {
+  status: 400 | 401 | 402 | 403 | 404 | 429;
+  constructor(status: 400 | 401 | 402 | 403 | 404 | 429, message: string) {
     super(message);
     this.status = status;
   }

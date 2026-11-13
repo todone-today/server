@@ -7,7 +7,10 @@ type Rule = { name: string; max: number; seconds: number };
 
 // Which rule a request falls under. Sign-in, sign-up and auth emails have Better Auth's own limits (auth.ts).
 export function ruleFor(method: string, path: string): Rule | null {
-  if (path.startsWith("/api/auth/") || path.startsWith("/api/cron/") || path === "/api/health") return null;
+  if (path.startsWith("/api/auth/") || path.startsWith("/api/cron/") || path.startsWith("/api/ai/worker/") || path === "/api/health")
+    return null;
+  // Ask todone costs a model call each; job polling is a read like any other.
+  if (path.startsWith("/api/ai/") && method === "POST") return { name: "ai", max: 20, seconds: 60 };
   if (path === "/api/feedback") return { name: "feedback", max: 10, seconds: 3600 };
   // Links that work without signing in, guarded only by their token: slow down anyone guessing tokens.
   if (/^\/api\/(sync|calendar|shared)\//.test(path)) return { name: "links", max: 60, seconds: 60 };

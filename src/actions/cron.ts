@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { purgeUnverified } from "../lib/auth.ts";
 import { pruneRateLimits } from "../lib/rate-limit.ts";
 import { pruneFiles } from "./files.ts";
+import { pruneAi } from "./ai.ts";
 
 // Called on a schedule (Vercel Cron sends "Authorization: Bearer $CRON_SECRET").
 export async function cron(req: Request) {
@@ -11,5 +12,6 @@ export async function cron(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   await pruneRateLimits();
   await pruneFiles();
+  await pruneAi();
   return Response.json({ purged: await purgeUnverified() });
 }

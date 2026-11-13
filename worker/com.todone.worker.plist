@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps the transcriber running: starts at login, restarts if it stops. Copy to ~/Library/LaunchAgents, fill in
+     the token, then: launchctl load ~/Library/LaunchAgents/com.todone.worker.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.todone.worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/xhunter/todone-worker/.venv/bin/python</string>
+    <string>/Users/xhunter/todone-worker/worker.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
+    <key>TODONE_URL</key><string>https://todone.today</string>
+    <key>AI_WORKER_TOKEN</key><string>REPLACE_WITH_TOKEN</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/xhunter/todone-worker/worker.log</string>
+  <key>StandardErrorPath</key><string>/Users/xhunter/todone-worker/worker.log</string>
+</dict>
+</plist>
