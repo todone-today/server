@@ -56,11 +56,16 @@ const count = (user: string, tokensIn: number, tokensOut: number) =>
     [user, month(), tokensIn, tokensOut],
   );
 
-// The AI's answer for these words, checked to hold at least one task, goal or reward (one retry), and counted.
+// The AI's answer for these words, checked to hold at least one task, goal or reward, and counted. One retry, on
+// the fallback model, for an answer with nothing usable or a request that hung or failed.
 async function think(user: string, words: string, c: Context) {
   const system = planPrompt(c);
   for (let i = 0; i < 2; i++) {
-    const g = await generate(system, words);
+    const g = await generate(system, words, i === 1).catch((e) => {
+      if (i === 1) throw e;
+      return null;
+    });
+    if (!g) continue;
     const md = g.text.replace(/^```\w*\n?|```\s*$/g, "").trim();
     const p = parsePlan(md, () => "x".repeat(8));
     if (p.lists.length || p.goals.length || p.rewards.length) {
