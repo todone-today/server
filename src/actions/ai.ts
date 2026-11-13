@@ -30,6 +30,7 @@ type Context = {
   lists: string[];
   goals: string[];
   rewards: string[];
+  here?: string; // the list they have open
   open?: { name: string; md: string }[];
 };
 export const MAX_OPEN = 3; // lists shared in one ask
@@ -55,6 +56,7 @@ export function context(x: unknown): Context {
     lists: names(c.lists, 100),
     goals: names(c.goals, 100),
     rewards: names(c.rewards, 50),
+    ...(typeof c.here === "string" && c.here ? { here: c.here.slice(0, 80) } : {}),
     ...(open.length ? { open } : {}),
   };
 }
