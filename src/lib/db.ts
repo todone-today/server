@@ -233,7 +233,7 @@ create table if not exists ai_job (
   created_at timestamptz not null default now()
 );
 create index if not exists ai_job_waiting on ai_job (created_at) where audio is not null;
--- AI requests a month per person, for the soft limit, and tokens, to watch the cost.
+-- Ask todone a month per person: requests, tokens, and the credits they cost (the plan limit).
 create table if not exists ai_usage (
   user_id text not null references "user"(id) on delete cascade,
   month text not null,
@@ -242,4 +242,5 @@ create table if not exists ai_usage (
   tokens_out bigint not null default 0,
   primary key (user_id, month)
 );
+alter table ai_usage add column if not exists credits integer not null default 0;
 `;

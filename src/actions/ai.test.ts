@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 process.env.AI_WORKER_TOKEN = "t".repeat(40);
-const { context, limitFor, workerOk, FREE_AI, PAID_AI } = await import("./ai.ts");
+const { context, creditsFor, limitFor, workerOk, FREE_AI, PAID_AI } = await import("./ai.ts");
 
 test("context keeps only names and a real date", () => {
   const c = context({ today: "2026-11-13", weekday: "Friday", lists: ["Work", 3, "x".repeat(200)], goals: "nope", evil: "drop" });
@@ -14,9 +14,16 @@ test("context keeps only names and a real date", () => {
   assert.match(bad.weekday, /^[A-Z][a-z]+day$/);
 });
 
-test("Free gets 20 AI requests a month; any paid plan, and accounts from before plans, 300", () => {
+test("Free gets 150 AI credits a month; any paid plan, and accounts from before plans, 2,000", () => {
   assert.equal(limitFor("free"), FREE_AI);
   for (const l of ["plus", "team", "unlimited"]) assert.equal(limitFor(l), PAID_AI);
+});
+
+test("credits: 1 per 1,000 input tokens, output 6×, at least 1", () => {
+  assert.equal(creditsFor(1042, 955), 7); // a typical ask: (1042 + 5730) / 1000, rounded up
+  assert.equal(creditsFor(0, 0), 1);
+  assert.equal(creditsFor(1000, 0), 1);
+  assert.equal(creditsFor(1001, 0), 2);
 });
 
 test("the transcriber needs its exact token", () => {

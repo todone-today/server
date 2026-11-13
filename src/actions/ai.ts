@@ -14,8 +14,12 @@ import { generate, hasAi } from "../lib/gemini.ts";
 import { billingOn } from "../lib/plans.ts";
 import { levelOf } from "./billing.ts";
 
-export const FREE_AI = 20;
-export const PAID_AI = 300;
+// AI credits a month, priced by tokens: 1 credit = 1,000 input tokens, and an output token (thinking included) costs
+// 6 input tokens, as Gemini's prices do. A typical ask is about 7–12 credits.
+export const FREE_AI = 150; // about 15–20 asks
+export const PAID_AI = 2000; // about 200–300 asks
+export const OUT_WEIGHT = 6;
+export const creditsFor = (tokensIn: number, tokensOut: number) => Math.max(1, Math.ceil((tokensIn + OUT_WEIGHT * tokensOut) / 1000));
 export const MAX_TEXT = 8000;
 export const AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"];
 const WAIT_MINUTES = 10; // a recording no transcriber picked up by then fails
@@ -34,26 +38,35 @@ export function context(x: unknown): Context {
   return { today, weekday, lists: names(c.lists, 100), goals: names(c.goals, 100), rewards: names(c.rewards, 50) };
 }
 
-// This month's allowance: Free 20, any paid plan (and accounts from before plans) 300; none on a server without billing.
+// This month's credits: Free 150, any paid plan (and accounts from before plans) 2,000; no limit on a server without billing.
 const month = () => new Date().toISOString().slice(0, 7);
 export const limitFor = (level: string) => (level === "free" ? FREE_AI : PAID_AI);
 async function usage(user: string) {
   const limit = billingOn ? limitFor((await levelOf(user)).level) : Infinity;
-  const { rows } = await db.query<{ n: number }>(`select n from ai_usage where user_id = $1 and month = $2`, [user, month()]);
-  return { used: rows[0]?.n ?? 0, limit };
+  const { rows } = await db.query<{ credits: number }>(`select credits from ai_usage where user_id = $1 and month = $2`, [
+    user,
+    month(),
+  ]);
+  return { used: rows[0]?.credits ?? 0, limit };
 }
 async function mayAsk(user: string) {
   if (!hasAi) throw bad("Ask todone isn't set up on this server.");
   const { used, limit } = await usage(user);
+  // Any credit left lets one more ask through; what it actually costs is counted after (so the last can go a little over).
   if (used < limit) return;
-  if (limit === FREE_AI) throw needsPlan(`Free includes ${FREE_AI} AI requests a month. Plus has ${PAID_AI}.`);
-  throw new ApiError(429, `You've used this month's ${limit} AI requests. “Use your own AI” still works, as much as you like.`);
+  if (limit === FREE_AI)
+    throw needsPlan(`Free includes ${FREE_AI} AI credits a month (about 15–20 asks). Plus has ${PAID_AI.toLocaleString("en-IN")}.`);
+  throw new ApiError(
+    429,
+    `You've used this month's ${limit.toLocaleString("en-IN")} AI credits; they refill on the 1st. “Use your own AI” still works, as much as you like.`,
+  );
 }
 const count = (user: string, tokensIn: number, tokensOut: number) =>
   db.query(
-    `insert into ai_usage (user_id, month, n, tokens_in, tokens_out) values ($1, $2, 1, $3, $4)
-     on conflict (user_id, month) do update set n = ai_usage.n + 1, tokens_in = ai_usage.tokens_in + $3, tokens_out = ai_usage.tokens_out + $4`,
-    [user, month(), tokensIn, tokensOut],
+    `insert into ai_usage (user_id, month, n, tokens_in, tokens_out, credits) values ($1, $2, 1, $3, $4, $5)
+     on conflict (user_id, month) do update set n = ai_usage.n + 1, tokens_in = ai_usage.tokens_in + $3,
+       tokens_out = ai_usage.tokens_out + $4, credits = ai_usage.credits + $5`,
+    [user, month(), tokensIn, tokensOut, creditsFor(tokensIn, tokensOut)],
   );
 
 // The AI's answer for these words, checked to hold at least one task, goal, reward or question, and counted. One retry, on
