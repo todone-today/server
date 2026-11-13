@@ -202,6 +202,10 @@ create table if not exists billing_sub (
 create index if not exists billing_sub_user on billing_sub (user_id);
 -- Bought at the launch price (one of the first LAUNCH_SPOTS).
 alter table billing_sub add column if not exists intro boolean not null default false;
+-- Purchases from before the mark: a first term paid at exactly the launch price (lib/plans.ts INTRO) took a spot.
+update billing_sub set intro = true where not intro and upfront > 0 and upfront = seats * case
+  when plan = 'plus' and term = 'half' then 34900 when plan = 'plus' and term = 'year' then 59900
+  when plan = 'team' and term = 'half' then 54900 when plan = 'team' and term = 'year' then 99900 end;
 -- Every charge, kept for receipts and tax records even after the account is deleted (hence the copied email).
 create sequence if not exists billing_invoice_seq;
 create table if not exists billing_payment (
