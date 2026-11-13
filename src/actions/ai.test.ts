@@ -32,3 +32,11 @@ test("the transcriber needs its exact token", () => {
   assert.equal(workerOk(undefined), false);
   assert.equal(workerOk("Bearer "), false);
 });
+
+test("context: shared lists are kept, up to 3, each cut to size; junk dropped", () => {
+  const c = context({ open: [{ name: "Trip", md: "- [ ] Pack [#1]" }, { name: 3 }, ...Array(5).fill({ name: "X", md: "y".repeat(30_000) })] });
+  assert.equal(c.open?.length, 3);
+  assert.deepEqual(c.open?.[0], { name: "Trip", md: "- [ ] Pack [#1]" });
+  assert.equal(c.open?.[1].md.length, 20_000);
+  assert.equal("open" in context({}), false);
+});

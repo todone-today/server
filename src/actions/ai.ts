@@ -24,10 +24,20 @@ export const MAX_TEXT = 8000;
 export const AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"];
 const WAIT_MINUTES = 10; // a recording no transcriber picked up by then fails
 
-type Context = { today: string; weekday: string; lists: string[]; goals: string[]; rewards: string[] };
+type Context = {
+  today: string;
+  weekday: string;
+  lists: string[];
+  goals: string[];
+  rewards: string[];
+  open?: { name: string; md: string }[];
+};
+export const MAX_OPEN = 3; // lists shared in one ask
+export const MAX_OPEN_TEXT = 20_000; // characters each
 const names = (x: unknown, max: number) =>
   Array.isArray(x) ? x.filter((s): s is string => typeof s === "string").map((s) => s.slice(0, 80)).slice(0, max) : [];
-// What the browser says about the person's workspace, cleaned: only names, and today as they see it.
+// What the browser says about the person's workspace, cleaned: names, today as they see it, and the lists they agreed
+// to share for this ask (a readable copy, which goes to the AI and isn't kept).
 export function context(x: unknown): Context {
   const c = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
   const today = typeof c.today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(c.today) ? c.today : new Date().toISOString().slice(0, 10);
@@ -35,7 +45,18 @@ export function context(x: unknown): Context {
     typeof c.weekday === "string" && /^[A-Za-z]{3,9}$/.test(c.weekday)
       ? c.weekday
       : new Date(`${today}T12:00:00Z`).toLocaleDateString("en", { weekday: "long", timeZone: "UTC" });
-  return { today, weekday, lists: names(c.lists, 100), goals: names(c.goals, 100), rewards: names(c.rewards, 50) };
+  const open = (Array.isArray(c.open) ? c.open : [])
+    .filter((l): l is { name: string; md: string } => !!l && typeof l.name === "string" && typeof l.md === "string")
+    .slice(0, MAX_OPEN)
+    .map((l) => ({ name: l.name.slice(0, 80), md: l.md.slice(0, MAX_OPEN_TEXT) }));
+  return {
+    today,
+    weekday,
+    lists: names(c.lists, 100),
+    goals: names(c.goals, 100),
+    rewards: names(c.rewards, 50),
+    ...(open.length ? { open } : {}),
+  };
 }
 
 // This month's credits: Free 150, any paid plan (and accounts from before plans) 2,000; no limit on a server without billing.
@@ -81,7 +102,7 @@ async function think(user: string, words: string, c: Context) {
     if (!g) continue;
     const md = g.text.replace(/^```\w*\n?|```\s*$/g, "").trim();
     const p = parsePlan(md, () => "x".repeat(8));
-    if (p.lists.length || p.goals.length || p.rewards.length || p.questions.length) {
+    if (p.lists.length || p.goals.length || p.rewards.length || p.questions.length || p.needs.length || p.changes.length) {
       await count(user, g.tokensIn, g.tokensOut);
       return md;
     }
