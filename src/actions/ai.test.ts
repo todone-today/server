@@ -40,3 +40,12 @@ test("context: shared lists are kept, up to 3, each cut to size; junk dropped", 
   assert.equal(c.open?.[1].md.length, 20_000);
   assert.equal("open" in context({}), false);
 });
+
+test("context keeps the conversation (its latest part) and up to 3 waiting questions", () => {
+  const c = context({ earlier: "x".repeat(5000) + "end", asked: ["How many days?", 4, "", "Which gym?", "c", "d"] });
+  assert.equal(c.earlier?.length, 3000);
+  assert.ok(c.earlier?.endsWith("end"));
+  assert.deepEqual(c.asked, ["How many days?", "Which gym?", "c"]);
+  assert.equal(context({}).earlier, undefined);
+  assert.equal(context({}).asked, undefined);
+});

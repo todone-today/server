@@ -32,9 +32,12 @@ type Context = {
   rewards: string[];
   here?: string; // the list they have open
   open?: { name: string; md: string }[];
+  earlier?: string;
+  asked?: string[];
 };
 export const MAX_OPEN = 3; // lists shared in one ask
 export const MAX_OPEN_TEXT = 20_000; // characters each
+export const MAX_EARLIER = 3_000; // the conversation so far, its latest part
 const names = (x: unknown, max: number) =>
   Array.isArray(x) ? x.filter((s): s is string => typeof s === "string").map((s) => s.slice(0, 80)).slice(0, max) : [];
 // What the browser says about the person's workspace, cleaned: names, today as they see it, and the lists they agreed
@@ -50,6 +53,10 @@ export function context(x: unknown): Context {
     .filter((l): l is { name: string; md: string } => !!l && typeof l.name === "string" && typeof l.md === "string")
     .slice(0, MAX_OPEN)
     .map((l) => ({ name: l.name.slice(0, 80), md: l.md.slice(0, MAX_OPEN_TEXT) }));
+  const asked = (Array.isArray(c.asked) ? c.asked : [])
+    .filter((q): q is string => typeof q === "string" && !!q.trim())
+    .slice(0, 3)
+    .map((q) => q.trim().slice(0, 200));
   return {
     today,
     weekday,
@@ -58,6 +65,9 @@ export function context(x: unknown): Context {
     rewards: names(c.rewards, 50),
     ...(typeof c.here === "string" && c.here ? { here: c.here.slice(0, 80) } : {}),
     ...(open.length ? { open } : {}),
+    // The conversation so far and questions still waiting, so a follow-up (typed or spoken) doesn't start over.
+    ...(typeof c.earlier === "string" && c.earlier.trim() ? { earlier: c.earlier.trim().slice(-MAX_EARLIER) } : {}),
+    ...(asked.length ? { asked } : {}),
   };
 }
 
