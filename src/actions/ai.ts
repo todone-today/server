@@ -20,7 +20,7 @@ export const FREE_AI = 150; // about 15–20 asks
 export const PAID_AI = 2000; // about 200–300 asks
 export const OUT_WEIGHT = 6;
 export const creditsFor = (tokensIn: number, tokensOut: number) => Math.max(1, Math.ceil((tokensIn + OUT_WEIGHT * tokensOut) / 1000));
-export const MAX_TEXT = 8000;
+export const MAX_TEXT = 50_000; // about 600–800 lines of brain dump
 export const AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-m4a"];
 const WAIT_MINUTES = 10; // a recording no transcriber picked up by then fails
 
@@ -122,13 +122,42 @@ async function think(user: string, words: string, c: Context) {
   throw bad("Couldn't find any tasks in that. Try saying what you need to do.");
 }
 
+// A very long brain dump (hundreds of lines) is planned in parts of about 100 lines, side by side: each part gets the
+// AI's whole answer budget, so nothing is dropped or squeezed, and it's faster. Only the first part may ask questions
+// or ask to read lists; the parts' answers join into one (lists with the same name merge when added).
+export const PART_LINES = 100;
+export function parts(text: string): string[] {
+  const lines = text.split("\n");
+  if (lines.filter((l) => l.trim()).length <= PART_LINES * 1.2) return [text];
+  const out: string[] = [];
+  let cur: string[] = [];
+  let n = 0;
+  for (const l of lines) {
+    cur.push(l);
+    if (l.trim() && ++n === PART_LINES) {
+      out.push(cur.join("\n"));
+      cur = [];
+      n = 0;
+    }
+  }
+  if (n) out.push(cur.join("\n"));
+  return out;
+}
+const ONLY_FIRST = /^##\s*(questions?|needs)\s*$[\s\S]*?(?=^##\s|(?![\s\S]))/gim;
+async function thinkAll(user: string, text: string, c: Context) {
+  const ps = parts(text);
+  if (ps.length === 1) return think(user, text, c);
+  const mds = await Promise.all(ps.map((p, i) => think(user, p, i ? { ...c, asked: undefined } : c)));
+  return mds.map((md, i) => (i ? md.replace(ONLY_FIRST, "").trim() : md)).join("\n\n");
+}
+
 export async function askText(b: Record<string, unknown>) {
   const { user } = await who();
   const text = typeof b.text === "string" ? b.text.trim() : "";
   if (!text) throw bad("Write what you need to do first.");
-  if (text.length > MAX_TEXT) throw bad(`That's a lot. Keep it under ${MAX_TEXT} characters.`);
+  if (text.length > MAX_TEXT) throw bad(`That's more than one ask can take (${MAX_TEXT.toLocaleString("en-IN")} characters, about 600 lines). Send it in two parts.`);
   await mayAsk(user);
-  const result = await think(user, text, context(b.context));
+  const result = await thinkAll(user, text, context(b.context));
   return { result, ...(await usage(user)) };
 }
 

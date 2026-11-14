@@ -10,8 +10,12 @@ export const hasAi = !!KEY;
 
 const BUSY = "The AI isn't answering right now. Try again in a moment.";
 
+// A long brain dump (hundreds of lines) needs room for hundreds of tasks: more output, lighter thinking (thinking
+// counts against the same output budget) and more time. Short asks think more, since there's less to write.
+export const isLong = (text: string) => text.length > 2000 || text.split("\n").filter((l) => l.trim()).length > 25;
 export async function generate(system: string, text: string, fallback = false) {
   const model = fallback ? FALLBACK : MODEL;
+  const long = isLong(text);
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": KEY },
@@ -19,9 +23,13 @@ export async function generate(system: string, text: string, fallback = false) {
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: "user", parts: [{ text }] }],
       // It thinks first (what are the real tasks, how urgent, how big); thinking is billed as output.
-      generationConfig: { temperature: 0.2, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "medium" } },
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: long ? 32_768 : 12_288,
+        thinkingConfig: { thinkingLevel: long ? "low" : "medium" },
+      },
     }),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(long ? 90_000 : 30_000),
   }).catch((e) => {
     console.error("gemini", model, e instanceof Error ? e.name : e); // timed out, or unreachable
     throw bad(BUSY);

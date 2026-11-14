@@ -49,3 +49,12 @@ test("context keeps the conversation (its latest part) and up to 3 waiting quest
   assert.equal(context({}).earlier, undefined);
   assert.equal(context({}).asked, undefined);
 });
+
+test("a long brain dump is planned in parts of about 100 lines; a short one isn't split", async () => {
+  const { parts } = await import("./ai.ts");
+  const lines = (n: number) => Array.from({ length: n }, (_, i) => `task ${i + 1}`).join("\n");
+  assert.equal(parts(lines(120)).length, 1);
+  const p = parts(lines(250));
+  assert.deepEqual(p.map((x) => x.split("\n").length), [100, 100, 50]);
+  assert.equal(p.join("\n"), lines(250)); // nothing lost, order kept
+});
