@@ -31,6 +31,7 @@ import {
   type Term,
 } from "../lib/plans.ts";
 import { checkoutOk, keyId, rzp, webhookOk } from "../lib/razorpay.ts";
+import { event } from "../lib/events.ts";
 
 const DAY = 86_400_000;
 const NAME: Record<Paid, string> = { plus: "Plus", team: "Team" };
@@ -348,7 +349,7 @@ async function stopOthers(user: string, keep: string) {
 }
 
 async function record(pay: Pay, user: string | null, sub: string | null, what: string) {
-  await db
+  const r = await db
     .query(
       `insert into billing_payment (id, user_id, email, sub_id, amount, what, invoice_no)
        select $1, $2, coalesce($3::text, (select email from "user" where id = $2), ''), $4, $5, $6,
@@ -359,6 +360,11 @@ async function record(pay: Pay, user: string | null, sub: string | null, what: s
     .catch((e) => {
       if (e.code !== "23505") throw e; // the same payment recorded twice at once
     });
+  // Counted once per payment (a retried webhook inserts nothing): a first purchase or a renewal, what and how much.
+  if (r?.rowCount) {
+    const { rows } = await db.query<{ n: number }>(`select count(*)::int as n from billing_payment where user_id = $1`, [user]);
+    event(rows[0]?.n > 1 ? "renewed" : "upgraded", { what, amount_inr: pay.amount / 100 });
+  }
 }
 
 // Stop renewing. What's paid for stays until its end.
