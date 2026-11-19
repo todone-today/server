@@ -186,6 +186,12 @@ create table if not exists push_vapid (
 );
 -- Paid plans through Razorpay (actions/billing.ts). A row per Razorpay subscription, or per Founding order
 -- (term 'founding'). paid_until: how far it's paid for; the plan counts until then (lib/plans.ts entitle).
+-- Who used the app on which day (India time), for the daily-active count on the dashboard (actions/stats.ts).
+create table if not exists active_day (
+  day date not null,
+  user_id text not null references "user"(id) on delete cascade,
+  primary key (day, user_id)
+);
 create table if not exists billing_sub (
   id text primary key,
   user_id text not null references "user"(id) on delete cascade,

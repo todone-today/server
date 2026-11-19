@@ -24,6 +24,7 @@ import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
 import { sharedView } from "./actions/shared.ts";
 import { syncedLists } from "./actions/sync-all-lists.ts";
+import { stats, statsAllowed } from "./actions/stats.ts";
 import { getList, putList } from "./actions/sync-list.ts";
 
 // The JSON API the clients call. Browsers reach it through the web app's /api (same origin), so the session
@@ -89,6 +90,13 @@ app.get("/api/health", async (c) => {
     .catch(() => false);
   return c.json({ api: true, db, ms: Math.round(performance.now() - t) }, db ? 200 : 503, { "cache-control": "no-store" });
 });
+
+// Counts for the production dashboard (actions/stats.ts): with the stats token only, else it doesn't exist.
+app.get("/api/stats", async (c) =>
+  statsAllowed(c.req.header("authorization"))
+    ? c.json(await stats(), 200, { "cache-control": "no-store" })
+    : c.json({ error: "Not found" }, 404),
+);
 
 // Links that work without signing in: each is guarded by its own secret token.
 app.get("/api/calendar/:file", (c) => feed(c.req.raw, c.req.param("file")));

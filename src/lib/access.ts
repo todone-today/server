@@ -1,4 +1,4 @@
-import { ApiError, requestHeaders } from "../context.ts";
+import { ApiError, later, requestHeaders } from "../context.ts";
 import { auth } from "./auth.ts";
 import { db } from "./db.ts";
 import type { List } from "@todone/sdk/tasks";
@@ -6,11 +6,22 @@ import type { List } from "@todone/sdk/tasks";
 // A list the user may touch ($1 = user id): their own, or one in an organization they belong to.
 export const MINE = `("userId" = $1 or "organizationId" in (select "organizationId" from member where "userId" = $1))`;
 
+// Marks the user active today (for the daily-active count), once per day per server process.
+const marked = new Set<string>();
+function seen(user: string) {
+  const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  if (marked.has(day + user)) return;
+  if (marked.size > 100_000) marked.clear();
+  marked.add(day + user);
+  later(() => db.query(`insert into active_day (day, user_id) values ($1, $2) on conflict do nothing`, [day, user]));
+}
+
 // The signed-in user and the workspace they're in: "u:<user>" for personal lists, "o:<org>" for a team.
 export async function who() {
   const s = await auth.api.getSession({ headers: requestHeaders() });
   if (!s) throw new ApiError(401, "Signed out");
   const user = s.user.id;
+  seen(user);
   const org = s.session.activeOrganizationId ?? null;
   let role = "owner";
   if (org) {
