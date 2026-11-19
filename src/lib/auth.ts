@@ -4,6 +4,7 @@ import { organization } from "better-auth/plugins";
 import { createHash } from "node:crypto";
 import { db } from "./db.ts";
 import { canEmail, sendEmail } from "./email.ts";
+import { event } from "./events.ts";
 import { mayInvite, mayMakeTeam, stopAll } from "../actions/billing.ts";
 
 // Sign in with Google, GitHub or Discord (each on when its keys are set). Signing in only proves who you are: your
@@ -68,6 +69,11 @@ export const auth = betterAuth({
       create: {
         // A profile picture from Gravatar when the sign-up didn't bring one (GitHub and Google do).
         before: async (user) => ({ data: { ...user, image: user.image || gravatar(user.email) } }),
+        // Counted for the sign-up funnel (docs/events.md): how they joined, nothing about who.
+        after: async (_user, ctx) => {
+          const provider = ctx?.params?.id ?? ctx?.body?.provider;
+          event("account_created", { method: ctx?.path === "/sign-up/email" ? "email" : typeof provider === "string" ? provider : "other" });
+        },
       },
     },
   },
