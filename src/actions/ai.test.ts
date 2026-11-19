@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 process.env.AI_WORKER_TOKEN = "t".repeat(40);
-const { context, creditsFor, limitFor, workerOk, FREE_AI, PAID_AI } = await import("./ai.ts");
+const { context, creditsFor, limitFor, workerOk, withMode, FREE_AI, PAID_AI } = await import("./ai.ts");
+const { planPrompt } = await import("@todone/sdk/plan");
 
 test("context keeps only names and a real date", () => {
   const c = context({ today: "2026-11-13", weekday: "Friday", lists: ["Work", 3, "x".repeat(200)], goals: "nope", evil: "drop" });
@@ -57,4 +58,19 @@ test("a long brain dump is planned in parts of about 100 lines; a short one isn'
   const p = parts(lines(250));
   assert.deepEqual(p.map((x) => x.split("\n").length), [100, 100, 50]);
   assert.equal(p.join("\n"), lines(250)); // nothing lost, order kept
+});
+
+test("Brainstorm asks get ideas-only rules; shared lists get change rules; plain asks are unchanged", () => {
+  const base = { today: "2026-11-19", weekday: "Thursday", lists: ["Work"] };
+  const ideas = context({ ...base, mode: "ideas" });
+  assert.equal(ideas.mode, "ideas");
+  const p = withMode(planPrompt(ideas), ideas);
+  assert.match(p, /only tasks, one per\s+idea[\s\S]*## Ideas[\s\S]*Here's what I need:\s*$/);
+  const change = context({ ...base, open: [{ name: "Work", md: "- [ ] [#1] Email Priya" }] });
+  assert.equal(change.mode, "change");
+  assert.match(withMode(planPrompt(change), change), /no "## Questions"[\s\S]*Here's what I need:/);
+  const plain = context(base);
+  assert.equal(plain.mode, undefined);
+  assert.equal(withMode(planPrompt(plain), plain), planPrompt(plain));
+  assert.equal(context({ ...base, mode: "admin" }).mode, undefined);
 });

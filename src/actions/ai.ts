@@ -34,6 +34,7 @@ type Context = {
   open?: { name: string; md: string }[];
   earlier?: string;
   asked?: string[];
+  mode?: "ideas" | "change"; // Brainstorm (idea cards only), or changing the lists shared
 };
 export const MAX_OPEN = 3; // lists shared in one ask
 export const MAX_OPEN_TEXT = 20_000; // characters each
@@ -68,7 +69,29 @@ export function context(x: unknown): Context {
     // The conversation so far and questions still waiting, so a follow-up (typed or spoken) doesn't start over.
     ...(typeof c.earlier === "string" && c.earlier.trim() ? { earlier: c.earlier.trim().slice(-MAX_EARLIER) } : {}),
     ...(asked.length ? { asked } : {}),
+    ...(c.mode === "ideas" ? { mode: "ideas" as const } : open.length ? { mode: "change" as const } : {}),
   };
+}
+
+// What this ask is for, on top of the plan prompt: Brainstorm wants ideas and nothing else; with lists shared, the
+// job is changing them, not planning anew. (The app also drops anything else that comes back.)
+export function modeRules(c: Context) {
+  if (c.mode === "ideas")
+    return `\nThis ask comes from my Brainstorm board, so it's different from the above: reply with only tasks, one per
+idea I mention, all under one heading "## Ideas". Make each a clear, short idea in my words; add steps only where I
+gave them. No "## Goals", "## Rewards", "## Questions", "## Needs" or "## Changes", and no dates, times or priorities
+unless I gave them. If I said nothing that could be an idea, reply with only "## Ideas" and nothing under it.\n`;
+  if (c.mode === "change")
+    return `\nThis ask is about changing the lists I shared above: do it with "## Changes", plus new tasks only if I asked
+you to add some. No "## Goals" or "## Rewards" unless I asked for goals or rewards, and no "## Questions": you have the
+list, so decide yourself.\n`;
+  return "";
+}
+// The rules go just before the prompt's closing "Here's what I need:", which introduces my words.
+export function withMode(prompt: string, c: Context) {
+  const rules = modeRules(c);
+  const i = prompt.lastIndexOf("Here's what I need:");
+  return !rules ? prompt : i < 0 ? prompt + rules : `${prompt.slice(0, i)}${rules.trimStart()}\n${prompt.slice(i)}`;
 }
 
 // This month's credits: Free 150, any paid plan (and accounts from before plans) 2,000; no limit on a server without billing.
@@ -105,7 +128,7 @@ const count = (user: string, tokensIn: number, tokensOut: number) =>
 // The AI's answer for these words, checked to hold at least one task, goal, reward or question, and counted. One retry, on
 // the fallback model, for an answer with nothing usable or a request that hung or failed.
 async function think(user: string, words: string, c: Context) {
-  const system = planPrompt(c);
+  const system = withMode(planPrompt(c), c);
   for (let i = 0; i < 2; i++) {
     const g = await generate(system, words, i === 1).catch((e) => {
       if (i === 1) throw e;
