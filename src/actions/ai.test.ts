@@ -73,4 +73,7 @@ test("Brainstorm asks get ideas-only rules; shared lists get change rules; plain
   assert.equal(plain.mode, undefined);
   assert.equal(withMode(planPrompt(plain), plain), planPrompt(plain));
   assert.equal(context({ ...base, mode: "admin" }).mode, undefined);
+  const start = context({ ...base, mode: "start" });
+  assert.equal(start.mode, "start");
+  assert.match(withMode(planPrompt(start), start), /first time in todone[\s\S]*## Ideas[\s\S]*No "## Questions"[\s\S]*Here's what I need:/);
 });

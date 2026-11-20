@@ -34,7 +34,7 @@ type Context = {
   open?: { name: string; md: string }[];
   earlier?: string;
   asked?: string[];
-  mode?: "ideas" | "change"; // Brainstorm (idea cards only), or changing the lists shared
+  mode?: "ideas" | "change" | "start"; // Brainstorm (idea cards only), changing the lists shared, or a first visit
 };
 export const MAX_OPEN = 3; // lists shared in one ask
 export const MAX_OPEN_TEXT = 20_000; // characters each
@@ -69,7 +69,7 @@ export function context(x: unknown): Context {
     // The conversation so far and questions still waiting, so a follow-up (typed or spoken) doesn't start over.
     ...(typeof c.earlier === "string" && c.earlier.trim() ? { earlier: c.earlier.trim().slice(-MAX_EARLIER) } : {}),
     ...(asked.length ? { asked } : {}),
-    ...(c.mode === "ideas" ? { mode: "ideas" as const } : open.length ? { mode: "change" as const } : {}),
+    ...(c.mode === "ideas" || c.mode === "start" ? { mode: c.mode } : open.length ? { mode: "change" as const } : {}),
   };
 }
 
@@ -81,6 +81,12 @@ export function modeRules(c: Context) {
 idea I mention, all under one heading "## Ideas". Make each a clear, short idea in my words; add steps only where I
 gave them. No "## Goals", "## Rewards", "## Questions", "## Needs" or "## Changes", and no dates, times or priorities
 unless I gave them. If I said nothing that could be an idea, reply with only "## Ideas" and nothing under it.\n`;
+  if (c.mode === "start")
+    return `\nThis is my first time in todone: I'm telling you what I want in life and what I'm doing now, so set me up.
+Make ONE todo list of concrete next steps for what I'm doing now (5 to 10 tasks), named after it, like "This week" or
+"Design business"; add dates or priorities only where I gave them. Put what I want in life, as small things I could
+try, under "## Ideas" (3 to 8). Add 1 to 3 "## Goals" and 1 to 3 "## Rewards" that fit what I said. No "## Questions",
+"## Needs" or "## Changes": decide yourself.\n`;
   if (c.mode === "change")
     return `\nThis ask is about changing the lists I shared above: do it with "## Changes", plus new tasks only if I asked
 you to add some. No "## Goals" or "## Rewards" unless I asked for goals or rewards, and no "## Questions": you have the
