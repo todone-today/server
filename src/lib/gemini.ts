@@ -13,7 +13,8 @@ const BUSY = "The AI isn't answering right now. Try again in a moment.";
 // A long brain dump (hundreds of lines) needs room for hundreds of tasks: more output, lighter thinking (thinking
 // counts against the same output budget) and more time. Short asks think more, since there's less to write.
 export const isLong = (text: string) => text.length > 2000 || text.split("\n").filter((l) => l.trim()).length > 25;
-export async function generate(system: string, text: string, fallback = false) {
+// `light`: less thinking, for asks that are about writing more than weighing (a first visit's setup, Brainstorm ideas).
+export async function generate(system: string, text: string, fallback = false, light = false) {
   const model = fallback ? FALLBACK : MODEL;
   const long = isLong(text);
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -26,10 +27,10 @@ export async function generate(system: string, text: string, fallback = false) {
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: long ? 32_768 : 12_288,
-        thinkingConfig: { thinkingLevel: long ? "low" : "medium" },
+        thinkingConfig: { thinkingLevel: long || light ? "low" : "medium" },
       },
     }),
-    signal: AbortSignal.timeout(long ? 90_000 : 30_000),
+    signal: AbortSignal.timeout(long ? 90_000 : 45_000),
   }).catch((e) => {
     console.error("gemini", model, e instanceof Error ? e.name : e); // timed out, or unreachable
     throw bad(BUSY);

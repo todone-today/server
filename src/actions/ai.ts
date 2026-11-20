@@ -83,10 +83,12 @@ gave them. No "## Goals", "## Rewards", "## Questions", "## Needs" or "## Change
 unless I gave them. If I said nothing that could be an idea, reply with only "## Ideas" and nothing under it.\n`;
   if (c.mode === "start")
     return `\nThis is my first time in todone: I'm telling you what I want in life and what I'm doing now, so set me up.
-Make ONE todo list of concrete next steps for what I'm doing now (5 to 10 tasks), named after it, like "This week" or
-"Design business"; add dates or priorities only where I gave them. Put what I want in life, as small things I could
-try, under "## Ideas" (3 to 8). Add 1 to 3 "## Goals" and 1 to 3 "## Rewards" that fit what I said. No "## Questions",
-"## Needs" or "## Changes": decide yourself.\n`;
+Use exactly two task headings, in this order:
+1. One todo list of 5 to 10 concrete next steps for what I'm doing now, named after it in a few words, like "This
+   week" or "Design business". Add dates or priorities only where I gave them.
+2. "## Ideas": 3 to 8 small things I could try towards what I want in life.
+Never make a second todo list: everything to do goes in the first one. Then 1 to 3 "## Goals" and 1 to 3 "## Rewards"
+that fit what I said. No "## Questions", "## Needs" or "## Changes": decide yourself.\n`;
   if (c.mode === "change")
     return `\nThis ask is about changing the lists I shared above: do it with "## Changes", plus new tasks only if I asked
 you to add some. No "## Goals" or "## Rewards" unless I asked for goals or rewards, and no "## Questions": you have the
@@ -131,13 +133,17 @@ const count = (user: string, tokensIn: number, tokensOut: number) =>
     [user, month(), tokensIn, tokensOut, creditsFor(tokensIn, tokensOut)],
   );
 
-// The AI's answer for these words, checked to hold at least one task, goal, reward or question, and counted. One retry, on
-// the fallback model, for an answer with nothing usable or a request that hung or failed.
+// The AI's answer for these words, checked to hold at least one task, goal, reward or question, and counted. For an
+// answer with nothing usable, or a request that hung or failed: the fallback model, then the main one again after a
+// short pause (Google sheds load with 503s at peaks, and both can be busy at once).
+const TRIES = [false, true, false];
 async function think(user: string, words: string, c: Context) {
   const system = withMode(planPrompt(c), c);
-  for (let i = 0; i < 2; i++) {
-    const g = await generate(system, words, i === 1).catch((e) => {
-      if (i === 1) throw e;
+  const light = c.mode === "start" || c.mode === "ideas";
+  for (let i = 0; i < TRIES.length; i++) {
+    if (i === 2) await new Promise((r) => setTimeout(r, 1500));
+    const g = await generate(system, words, TRIES[i], light).catch((e) => {
+      if (i === TRIES.length - 1) throw e;
       return null;
     });
     if (!g) continue;
