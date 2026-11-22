@@ -255,4 +255,39 @@ create table if not exists ai_usage (
   primary key (user_id, month)
 );
 alter table ai_usage add column if not exists credits integer not null default 0;
+-- A goal shared by link (actions/goalShares.ts): a readable copy its owner agreed to publish (goals are otherwise
+-- end-to-end encrypted). "view": anyone with the link sees it (free); "challenge": they can join (Plus), up to 6 in all.
+-- goal is the goal's id in the owner's encrypted list, so their app knows which copy to keep up to date.
+create table if not exists goal_share (
+  id text primary key,
+  workspace text not null,
+  owner text not null references "user"(id) on delete cascade,
+  goal text not null,
+  mode text not null check (mode in ('view', 'challenge')),
+  snapshot jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists goal_share_owner_goal on goal_share (owner, goal);
+-- Someone who joined a challenge: their own copy of the goal (in their own encrypted list, id goal) and its
+-- progress, published like the owner's.
+create table if not exists goal_participant (
+  share_id text not null references goal_share(id) on delete cascade,
+  user_id text not null references "user"(id) on delete cascade,
+  goal text not null,
+  snapshot jsonb not null default '{}',
+  joined_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  first_checkin_at timestamptz,
+  primary key (share_id, user_id)
+);
+-- A new account that came through someone's challenge: one per new account. Activated by its first real check-in.
+create table if not exists referral (
+  invitee text primary key references "user"(id) on delete cascade,
+  inviter text not null references "user"(id) on delete cascade,
+  share_id text references goal_share(id) on delete set null,
+  joined_at timestamptz not null default now(),
+  activated_at timestamptz
+);
+create index if not exists referral_inviter on referral (inviter);
 `;

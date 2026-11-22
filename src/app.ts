@@ -14,6 +14,7 @@ import * as integrations from "./actions/integrations.ts";
 import * as keys from "./actions/keys.ts";
 import * as files from "./actions/files.ts";
 import * as shares from "./actions/shares.ts";
+import * as goalShares from "./actions/goalShares.ts";
 import * as push from "./actions/push.ts";
 import * as billing from "./actions/billing.ts";
 import * as ai from "./actions/ai.ts";
@@ -125,6 +126,8 @@ app.route("/api/ai/worker", worker);
 // Before signing in, and forgot-password: how to derive keys, and the recovery-key reset (token-guarded).
 // A shared task's link (no account): the token is the key. The guest's random browser key comes in x-guest.
 app.get("/api/s/:token", async (c) => c.json(await shares.guestView(c.req.param("token"), c.req.header("x-guest"))));
+// A goal shared by link (view or challenge): its public page, no account needed.
+app.get("/api/g/:slug", async (c) => c.json(await goalShares.view(c.req.param("slug"))));
 app.post("/api/s/:token/comments", async (c) => {
   const share = await shares.byToken(c.req.param("token"));
   const b = await body(c);
@@ -196,6 +199,15 @@ me.post("/files", async (c) => c.json(await files.createFile(await body(c))));
 me.post("/files/:id/done", async (c) => c.json(await files.confirmFile(c.req.param("id"))));
 me.get("/files/:id", async (c) => c.json(await files.fileLink(c.req.param("id"))));
 me.delete("/files/:id", async (c) => c.json(await files.deleteFile(c.req.param("id"))));
+me.post("/goal-shares", async (c) => {
+  const b = await body(c);
+  return c.json(await goalShares.share(b.goal, b.mode, b.snapshot));
+});
+me.get("/goal-shares", async (c) => c.json(await goalShares.mine()));
+me.put("/goal-shares/:slug", async (c) => c.json(await goalShares.update(c.req.param("slug"), (await body(c)).snapshot)));
+me.delete("/goal-shares/:slug", async (c) => c.json(await goalShares.unshare(c.req.param("slug"))));
+me.post("/g/:slug/join", async (c) => c.json(await goalShares.join(c.req.param("slug"), (await body(c)).goal)));
+me.delete("/g/:slug/join", async (c) => c.json(await goalShares.leave(c.req.param("slug"))));
 me.post("/task-shares", async (c) => c.json(await shares.createShare((await body(c)).task)));
 me.get("/task-shares", async (c) => c.json(await shares.guestCounts()));
 me.get("/task-shares/:id", async (c) => c.json(await shares.ownerView(c.req.param("id"))));

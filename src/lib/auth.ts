@@ -1,8 +1,11 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { organization } from "better-auth/plugins";
+
+const KEY_FIELDS = new Set(["kdfSalt", "kdfIter", "wrappedKey", "recoveryWrappedKey", "encryptedRecovery", "publicKey", "wrappedPrivateKey"]);
 import { createHash } from "node:crypto";
 import { db } from "./db.ts";
+import { remove } from "./r2.ts";
 import { canEmail, sendEmail } from "./email.ts";
 import { event } from "./events.ts";
 import { mayInvite, mayMakeTeam, stopAll } from "../actions/billing.ts";
@@ -75,6 +78,13 @@ export const auth = betterAuth({
           event("account_created", { method: ctx?.path === "/sign-up/email" ? "email" : typeof provider === "string" ? provider : "other" });
         },
       },
+      // Key material is set at sign-up and changed only through actions/keys.ts (password, freshness and format
+      // checks, raw SQL). /update-user must never touch it: a session alone could wipe or swap someone's keys.
+      update: {
+        before: async (data) => {
+          if (Object.keys(data).some((k) => KEY_FIELDS.has(k))) throw new APIError("BAD_REQUEST", { message: "Not allowed" });
+        },
+      },
     },
   },
   user: {
@@ -101,6 +111,8 @@ export const auth = betterAuth({
             message: `You're the only owner of “${stuck.name}”. Make someone else an owner or delete the team first.`,
           });
         await dropSoloTeams(user.id);
+        // Their share links in any workspace: the rows cascade with the user, the stored media wouldn't.
+        await dropFiles(`share_id in (select id from task_share where owner = $1)`, user.id);
         await stopAll(user.id); // nothing renews for a deleted account
       },
       // Lists, sessions, memberships and push devices go with the user row; these are keyed by workspace.
@@ -136,12 +148,7 @@ export const auth = betterAuth({
       organizationHooks: {
         beforeCreateInvitation: async ({ organization: o, inviter }) => mayInvite(o.id, inviter.id),
         // A team's lists go with it (foreign keys); its integration secrets and links must go too.
-        afterDeleteOrganization: async ({ organization: o }) => {
-          const ws = `o:${o.id}`;
-          await db.query(`delete from calendar_share where workspace = $1`, [ws]);
-          await db.query(`delete from sync_map where workspace = $1`, [ws]);
-          await db.query(`delete from workspace where id = $1`, [ws]);
-        },
+        afterDeleteOrganization: async ({ organization: o }) => dropWorkspace(`o:${o.id}`),
       },
     }),
   ],
@@ -184,7 +191,18 @@ export async function purgeUnverified(): Promise<number> {
   return rows.length;
 }
 
+// Stored files (attachments and shared media) matching a condition on `file`: from R2 first, then their rows.
+async function dropFiles(where: string, arg: string) {
+  const { rows } = await db.query<{ id: string; key: string }>(`select id, key from file where ${where}`, [arg]);
+  for (const f of rows) await remove(f.key);
+  if (rows.length) await db.query(`delete from file where id = any($1)`, [rows.map((f) => f.id)]);
+}
+
+// Everything kept per workspace that isn't tied to it by a foreign key: links, sync state, files and share links.
 async function dropWorkspace(ws: string, orgId?: string) {
+  await dropFiles(`workspace = $1`, ws);
+  await db.query(`delete from task_share where workspace = $1`, [ws]);
+  await db.query(`delete from goal_share where workspace = $1`, [ws]);
   await db.query(`delete from calendar_share where workspace = $1`, [ws]);
   await db.query(`delete from sync_map where workspace = $1`, [ws]);
   await db.query(`delete from workspace where id = $1`, [ws]);
