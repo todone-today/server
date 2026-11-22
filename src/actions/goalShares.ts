@@ -86,7 +86,22 @@ export async function mine() {
     `select share_id as slug, goal from goal_participant where user_id = $1`,
     [user],
   );
-  return { own: own.rows, joined: joined.rows };
+  // In each challenge: how many others showed up this week (their copy says so, updated in the last 7 days), and
+  // whether a referral there was activated in the last 14 days (it doubles the together bonus for both people).
+  const together = await db.query<{ slug: string; active: number; boost: boolean }>(
+    `select g.id as slug,
+       (select count(*)::int from goal_participant p where p.share_id = g.id and p.user_id <> $1
+          and coalesce((p.snapshot->>'thisWeek')::numeric, 0) > 0 and p.updated_at > now() - interval '7 days')
+       + case when g.owner <> $1 and coalesce((g.snapshot->>'thisWeek')::numeric, 0) > 0
+                and g.updated_at > now() - interval '7 days' then 1 else 0 end as active,
+       exists (select 1 from referral r where r.share_id = g.id and (r.inviter = $1 or r.invitee = $1)
+               and r.activated_at > now() - interval '14 days') as boost
+     from goal_share g
+     where g.mode = 'challenge'
+       and (g.owner = $1 or exists (select 1 from goal_participant p where p.share_id = g.id and p.user_id = $1))`,
+    [user],
+  );
+  return { own: own.rows, joined: joined.rows, together: together.rows };
 }
 
 // A new copy of one goal's progress: the owner's (on the share), or a joiner's (on their row). A joiner's first

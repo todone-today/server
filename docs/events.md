@@ -37,5 +37,7 @@ Every product event todone sends to PostHog (US cloud, project 493072). Add a ro
 | `ask_used` | `app/app/AiImport.tsx` | `via`: `typed`, `voice` | Ask todone took a request. |
 | `share_sheet_opened` | `app/app/ShareSheet.tsx` | `kind`: `win`, `progress`, `recap` | A share card was opened to share. |
 | `share_card_exported` | `app/app/ShareSheet.tsx` | `kind`; `via`: `share`, `save` | A share card went to the phone's share sheet, or was saved. |
+| `goal_link_made` | `app/app/ShareSheet.tsx` | `mode`: `view`, `challenge` | A link to a goal was made and copied. |
+| `goal_link_used` | `app/app/TodoApp.tsx` | `what`: `join`, `clone`; `ok` | Someone arrived from a shared goal's page and joined its challenge or copied the goal (`ok` false: the join failed, e.g. full). |
 
 Not tracked: anything in the demo, session recordings or heatmaps inside the app, and which list or task an action happened to.
