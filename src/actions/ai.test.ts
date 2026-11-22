@@ -77,3 +77,13 @@ test("Brainstorm asks get ideas-only rules; shared lists get change rules; plain
   assert.equal(start.mode, "start");
   assert.match(withMode(planPrompt(start), start), /first time in todone[\s\S]*## Ideas[\s\S]*No "## Questions"[\s\S]*Here's what I need:/);
 });
+
+test("asks from the Goals or Rewards page get goals-only or rewards-only rules", () => {
+  const base = { today: "2026-11-22", weekday: "Sunday", lists: ["Work"] };
+  const goals = context({ ...base, mode: "goals" });
+  assert.equal(goals.mode, "goals");
+  assert.match(withMode(planPrompt(goals), goals), /Goals page[\s\S]*"## Goals" only[\s\S]*Here's what I need:\s*$/);
+  const rewards = context({ ...base, mode: "rewards" });
+  assert.equal(rewards.mode, "rewards");
+  assert.match(withMode(planPrompt(rewards), rewards), /Rewards page[\s\S]*"## Rewards" only[\s\S]*No tasks[\s\S]*Here's what I need:/);
+});

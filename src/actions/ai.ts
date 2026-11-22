@@ -34,7 +34,8 @@ type Context = {
   open?: { name: string; md: string }[];
   earlier?: string;
   asked?: string[];
-  mode?: "ideas" | "change" | "start"; // Brainstorm (idea cards only), changing the lists shared, or a first visit
+  // Brainstorm (idea cards only), the Goals or Rewards page (those only), changing the lists shared, or a first visit.
+  mode?: "ideas" | "goals" | "rewards" | "change" | "start";
 };
 export const MAX_OPEN = 3; // lists shared in one ask
 export const MAX_OPEN_TEXT = 20_000; // characters each
@@ -69,7 +70,11 @@ export function context(x: unknown): Context {
     // The conversation so far and questions still waiting, so a follow-up (typed or spoken) doesn't start over.
     ...(typeof c.earlier === "string" && c.earlier.trim() ? { earlier: c.earlier.trim().slice(-MAX_EARLIER) } : {}),
     ...(asked.length ? { asked } : {}),
-    ...(c.mode === "ideas" || c.mode === "start" ? { mode: c.mode } : open.length ? { mode: "change" as const } : {}),
+    ...(c.mode === "ideas" || c.mode === "goals" || c.mode === "rewards" || c.mode === "start"
+      ? { mode: c.mode }
+      : open.length
+        ? { mode: "change" as const }
+        : {}),
   };
 }
 
@@ -81,6 +86,14 @@ export function modeRules(c: Context) {
 idea I mention, all under one heading "## Ideas". Make each a clear, short idea in my words; add steps only where I
 gave them. No "## Goals", "## Rewards", "## Questions", "## Needs" or "## Changes", and no dates, times or priorities
 unless I gave them. If I said nothing that could be an idea, reply with only "## Ideas" and nothing under it.\n`;
+  if (c.mode === "goals")
+    return `\nThis ask comes from my Goals page, so it's different from the above: reply with "## Goals" only, 1 to 5 goals
+that fit what I said, each with its kind and numbers. Add one todo list of first steps only if I asked for steps. No
+"## Rewards", "## Questions", "## Needs" or "## Changes": decide yourself.\n`;
+  if (c.mode === "rewards")
+    return `\nThis ask comes from my Rewards page, so it's different from the above: reply with "## Rewards" only, 1 to 6
+treats that fit what I said, each priced in XP (about 15 XP per task it's worth). No tasks, no "## Goals",
+"## Questions", "## Needs" or "## Changes".\n`;
   if (c.mode === "start")
     return `\nThis is my first time in todone: I'm telling you what I want in life and what I'm doing now, so set me up.
 Use exactly two task headings, in this order:
