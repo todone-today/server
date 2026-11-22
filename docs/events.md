@@ -35,5 +35,7 @@ Every product event todone sends to PostHog (US cloud, project 493072). Add a ro
 | `task_done` | `app/app/TodoApp.tsx` | — | A task or step was ticked done (unticking isn't counted). |
 | `list_created` | `lib/store.ts` | — | A list was made (not the Bin, Brainstorm or Goals). The demo is not counted. |
 | `ask_used` | `app/app/AiImport.tsx` | `via`: `typed`, `voice` | Ask todone took a request. |
+| `share_sheet_opened` | `app/app/ShareSheet.tsx` | `kind`: `win`, `progress`, `recap` | A share card was opened to share. |
+| `share_card_exported` | `app/app/ShareSheet.tsx` | `kind`; `via`: `share`, `save` | A share card went to the phone's share sheet, or was saved. |
 
 Not tracked: anything in the demo, session recordings or heatmaps inside the app, and which list or task an action happened to.
