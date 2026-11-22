@@ -14,7 +14,9 @@ const BUSY = "The AI isn't answering right now. Try again in a moment.";
 // counts against the same output budget) and more time. Short asks think more, since there's less to write.
 export const isLong = (text: string) => text.length > 2000 || text.split("\n").filter((l) => l.trim()).length > 25;
 // `light`: less thinking, for asks that are about writing more than weighing (a first visit's setup, Brainstorm ideas).
-export async function generate(system: string, text: string, fallback = false, light = false) {
+// `creative`: suggesting (ideas, goals, rewards, a first setup) rather than sorting out what was said, so a warmer
+// temperature: asked twice, it suggests different things.
+export async function generate(system: string, text: string, fallback = false, light = false, creative = false) {
   const model = fallback ? FALLBACK : MODEL;
   const long = isLong(text);
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -25,7 +27,8 @@ export async function generate(system: string, text: string, fallback = false, l
       contents: [{ role: "user", parts: [{ text }] }],
       // It thinks first (what are the real tasks, how urgent, how big); thinking is billed as output.
       generationConfig: {
-        temperature: 0.2,
+        temperature: creative ? 0.9 : 0.2,
+        ...(creative ? { topP: 0.95 } : {}),
         maxOutputTokens: long ? 32_768 : 12_288,
         thinkingConfig: { thinkingLevel: long || light ? "low" : "medium" },
       },

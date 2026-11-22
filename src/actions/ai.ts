@@ -87,13 +87,17 @@ idea I mention, all under one heading "## Ideas". Make each a clear, short idea 
 gave them. No "## Goals", "## Rewards", "## Questions", "## Needs" or "## Changes", and no dates, times or priorities
 unless I gave them. If I said nothing that could be an idea, reply with only "## Ideas" and nothing under it.\n`;
   if (c.mode === "goals")
-    return `\nThis ask comes from my Goals page, so it's different from the above: reply with "## Goals" only, 1 to 5 goals
-that fit what I said, each with its kind and numbers. Add one todo list of first steps only if I asked for steps. No
-"## Rewards", "## Questions", "## Needs" or "## Changes": decide yourself.\n`;
+    return `\nThis ask comes from my Goals page, so it's different from the above: reply with "## Goals" only, 2 to 5 goals.
+Make them mine: built from what I said, my lists and my life, never generic ("be healthier" is not a goal; "Walk
+8,000 steps a day" is). Each specific and measurable, with real numbers and units, and a date only when one fits. Mix
+the kinds (habit, target, daily, outcome) where it makes sense. Never repeat a goal I already have, or suggest the
+same thing twice. No tasks, "## Rewards", "## Questions", "## Needs" or "## Changes": decide yourself.\n`;
   if (c.mode === "rewards")
-    return `\nThis ask comes from my Rewards page, so it's different from the above: reply with "## Rewards" only, 1 to 6
-treats that fit what I said, each priced in XP (about 15 XP per task it's worth). No tasks, no "## Goals",
-"## Questions", "## Needs" or "## Changes".\n`;
+    return `\nThis ask comes from my Rewards page, so it's different from the above: reply with "## Rewards" only, 3 to 6
+treats. Make them mine: from what I said I enjoy, my lists and goals, and where I live, never generic ("treat
+yourself" or "relax" are not rewards; "Masala dosa at the corner café" or "An hour of FIFA" are). Mix sizes: at least
+one small (50–150 XP), one medium (200–400 XP) and, when it fits, one big (500+ XP). Never repeat a reward I already
+have. No tasks, no "## Goals", "## Questions", "## Needs" or "## Changes".\n`;
   if (c.mode === "start")
     return `\nThis is my first time in todone: I'm telling you what I want in life and what I'm doing now, so set me up.
 Use exactly two task headings, in this order:
@@ -153,9 +157,10 @@ const TRIES = [false, true, false];
 async function think(user: string, words: string, c: Context) {
   const system = withMode(planPrompt(c), c);
   const light = c.mode === "start" || c.mode === "ideas";
+  const creative = c.mode === "start" || c.mode === "ideas" || c.mode === "goals" || c.mode === "rewards";
   for (let i = 0; i < TRIES.length; i++) {
     if (i === 2) await new Promise((r) => setTimeout(r, 1500));
-    const g = await generate(system, words, TRIES[i], light).catch((e) => {
+    const g = await generate(system, words, TRIES[i], light, creative).catch((e) => {
       if (i === TRIES.length - 1) throw e;
       return null;
     });
