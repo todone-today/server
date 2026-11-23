@@ -4,7 +4,7 @@ It only connects out: it asks the server for the next recording, transcribes it 
 back, and deletes its copy. A live recording (someone still talking) comes back again each time a new 2-second piece
 arrives, and all of it so far is transcribed again, so the words show as they speak. The server never connects to it. Settings come from the environment:
 
-  TODONE_URL       the web app's address, e.g. https://todone.today
+  TODONE_URL       the web app's address, e.g. https://app.todone.today
   AI_WORKER_TOKEN  the same long random token the server has
   WHISPER_MODEL    optional, default mlx-community/whisper-large-v3-turbo
 """
