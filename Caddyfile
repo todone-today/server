@@ -61,6 +61,10 @@
 		}
 	}
 
+	# The website's pages, asked for at the app's address (an old link, or one in an older app): sent to the website.
+	@site path /privacy /terms /cookies /refunds /acceptable-use /changelog /docs /install /status /demo /g/* /t/* /calendar/*
+	redir @site https://todone.today{uri} 308
+
 	# The app isn't for search engines (the website is).
 	handle /robots.txt {
 		respond "User-agent: *
