@@ -43,6 +43,8 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-todone <hello@todone.today>}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # The app's Sentry project: its error reports pass through /api/monitoring.
+      WEB_SENTRY_DSN: ${WEB_SENTRY_DSN:-}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
