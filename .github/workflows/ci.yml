@@ -45,11 +45,13 @@ jobs:
           mkdir -p /root/todone-backups
           docker exec todone-db-1 pg_dump -U todone todone | gzip > "/root/todone-backups/todone-$(date +%Y%m%d-%H%M%S).sql.gz"
           ls -1t /root/todone-backups/todone-*.sql.gz | tail -n +31 | xargs -r rm --
+          was=$(git rev-parse HEAD)
           git fetch -q origin && git checkout -q main && git merge --ff-only -q "$GIT_SHA"
           docker compose build server
           docker compose up -d --no-deps server caddy
-          # A Caddy that was just recreated is still starting: wait for it to take the (possibly changed) config.
-          for i in $(seq 1 15); do docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null && break; sleep 2; done
+          # Caddy mounts the Caddyfile as one file, and a pull replaces the file, so a changed one needs a fresh
+          # container (a reload would read the old copy). A second or two; otherwise it's left alone.
+          if ! git diff --quiet "$was" HEAD -- Caddyfile; then docker compose up -d --no-deps --force-recreate caddy; fi
           for i in $(seq 1 30); do docker exec todone-server-1 wget -qO- http://localhost:4000/api/health >/dev/null 2>&1 && exit 0; sleep 2; done
           docker logs --tail 30 todone-server-1; exit 1
           DEPLOY
