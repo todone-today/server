@@ -10,6 +10,8 @@ export function ruleFor(method: string, path: string): Rule | null {
   if (path.startsWith("/api/auth/") || path.startsWith("/api/cron/") || path.startsWith("/api/ai/worker/") || path === "/api/health")
     return null;
   // Ask todone costs a model call each; job polling is a read like any other.
+  // Live speech: a small piece of the recording every 2 seconds, while someone talks.
+  if (/^\/api\/ai\/voice\/[\w-]+\/more$/.test(path)) return { name: "ai-live", max: 120, seconds: 60 };
   if (path.startsWith("/api/ai/") && method === "POST") return { name: "ai", max: 20, seconds: 60 };
   if (path === "/api/feedback") return { name: "feedback", max: 10, seconds: 3600 };
   // Links that work without signing in, guarded only by their token: slow down anyone guessing tokens.

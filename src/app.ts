@@ -242,7 +242,19 @@ me.put("/push/devices/:id/notes", async (c) => c.json(await push.setNotes(c.req.
 // Ask todone (actions/ai.ts): typed words answer straight away; a recording becomes a job to poll.
 me.post("/ai/text", async (c) => c.json(await ai.askText(await body(c))));
 me.post("/ai/voice", async (c) =>
-  c.json(await ai.askVoice(await c.req.arrayBuffer(), c.req.header("content-type") ?? "", c.req.header("x-context"))),
+  c.json(
+    await ai.askVoice(
+      await c.req.arrayBuffer(),
+      c.req.header("content-type") ?? "",
+      c.req.header("x-context"),
+      c.req.header("x-words-only") === "1",
+      c.req.header("x-live") === "1",
+    ),
+  ),
+);
+// The next 2-second piece of a live recording; "x-final: 1" on the last.
+me.post("/ai/voice/:id/more", async (c) =>
+  c.json(await ai.more(c.req.param("id"), await c.req.arrayBuffer(), c.req.header("x-final") === "1")),
 );
 me.get("/ai/jobs/:id", async (c) => c.json(await ai.job(c.req.param("id"))));
 me.delete("/ai/jobs/:id", async (c) => c.json(await ai.dropJob(c.req.param("id"))));

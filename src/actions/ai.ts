@@ -36,6 +36,7 @@ type Context = {
   asked?: string[];
   // Brainstorm (idea cards only), the Goals or Rewards page (those only), changing the lists shared, or a first visit.
   mode?: "ideas" | "goals" | "rewards" | "change" | "start";
+  wordsOnly?: boolean; // a recording to type out only: its words come back, no plan is made (and no credits used)
 };
 export const MAX_OPEN = 3; // lists shared in one ask
 export const MAX_OPEN_TEXT = 20_000; // characters each
@@ -214,25 +215,48 @@ export async function askText(b: Record<string, unknown>) {
   return { result, ...(await usage(user)) };
 }
 
-export async function askVoice(audio: ArrayBuffer, type: string, rawContext: string | undefined) {
+// `live`: the first piece of a recording still going; more pieces follow (more()), and the words so far show as it
+// goes. Otherwise the whole recording, at once.
+export async function askVoice(audio: ArrayBuffer, type: string, rawContext: string | undefined, wordsOnly = false, live = false) {
   const { user } = await who();
   const base = type.split(";")[0].trim().toLowerCase();
   if (!AUDIO_TYPES.includes(base)) throw bad("That recording format isn't supported.");
-  if (audio.byteLength < 1000) throw bad("That recording is empty. Try again.");
+  if (audio.byteLength < (live ? 1 : 1000)) throw bad("That recording is empty. Try again.");
   await mayAsk(user);
   let c: unknown = null;
   try {
     c = JSON.parse(decodeURIComponent(rawContext ?? ""));
   } catch {}
   const id = crypto.randomUUID();
-  await db.query(`insert into ai_job (id, user_id, audio, audio_type, context) values ($1, $2, $3, $4, $5)`, [
-    id,
-    user,
-    Buffer.from(audio),
-    base,
-    JSON.stringify(context(c)),
-  ]);
+  await db.query(
+    `insert into ai_job (id, user_id, audio, audio_type, context, status, rev, final) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      id,
+      user,
+      Buffer.from(audio),
+      base,
+      JSON.stringify({ ...context(c), ...(wordsOnly || live ? { wordsOnly: true } : {}) }),
+      live ? "live" : "queued",
+      live ? 1 : 0,
+      !live,
+    ],
+  );
   return { id };
+}
+
+export const MAX_LIVE_BYTES = 1_500_000; // about 8 minutes at the browser's 24 kbit/s; recordings stop at 5
+// The next piece of a live recording (the browser's pieces, joined in order, are the whole file). `final`: the last.
+export async function more(id: string, audio: ArrayBuffer, final: boolean) {
+  const { user } = await who();
+  const { rows } = await db.query<{ size: number }>(
+    `update ai_job set audio = audio || $3, rev = rev + 1, final = $4,
+       status = case when status = 'transcribing' then status else 'live' end
+     where id = $1 and user_id = $2 and not final and audio is not null and octet_length(audio) + $5 <= $6
+     returning octet_length(audio) as size`,
+    [id, user, Buffer.from(audio), final, audio.byteLength, MAX_LIVE_BYTES],
+  );
+  if (!rows[0]) throw bad("That recording has stopped. Try again.");
+  return { ok: true };
 }
 
 type Job = { status: string; transcript: string | null; result: string | null; error: string | null; created_at: Date };
@@ -280,22 +304,36 @@ export function workerOk(header: string | undefined) {
   return token.length >= 32 && got.length === want.length && timingSafeEqual(got, want);
 }
 
-// The oldest recording waiting (or one whose transcriber went quiet), leased for 3 minutes.
+// The oldest recording waiting (or one whose transcriber went quiet), leased for 3 minutes. A live one is waiting
+// whenever a piece came in since its words were last made: the transcriber turns all of it so far into words again.
 export async function claim() {
-  const { rows } = await db.query<{ id: string; audio: Buffer; audio_type: string }>(
+  const { rows } = await db.query<{ id: string; audio: Buffer; audio_type: string; rev: number; final: boolean }>(
     `update ai_job set status = 'transcribing', lease_until = now() + interval '3 minutes'
      where id = (select id from ai_job
-                 where audio is not null and (status = 'queued' or (status = 'transcribing' and lease_until < now()))
+                 where audio is not null and (status = 'queued' or (status = 'live' and rev > heard_rev)
+                   or (status = 'transcribing' and lease_until < now()))
                  order by created_at limit 1 for update skip locked)
-     returning id, audio, audio_type`,
+     returning id, audio, audio_type, rev, final`,
   );
   const j = rows[0];
-  return j ? { id: j.id, type: j.audio_type, audio: j.audio.toString("base64") } : null;
+  return j ? { id: j.id, type: j.audio_type, audio: j.audio.toString("base64"), rev: j.rev, final: j.final } : null;
 }
 
 // The words are in: the recording is deleted, and the AI makes the plan in the background.
 export async function transcribed(id: string, b: Record<string, unknown>) {
   const words = typeof b.transcript === "string" ? b.transcript.trim().slice(0, MAX_TEXT) : "";
+  // A live recording's words so far: kept to show, and it waits for the next piece. Done once the words cover the
+  // final piece (rev = the last one).
+  const rev = typeof b.rev === "number" ? b.rev : null;
+  if (rev !== null) {
+    const { rows } = await db.query<{ done: boolean }>(
+      `update ai_job set transcript = coalesce(nullif($2, ''), transcript), heard_rev = greatest(heard_rev, $3),
+         lease_until = null, status = case when final and rev = $3 then status else 'live' end
+       where id = $1 and status = 'transcribing' returning final and rev = $3 as done`,
+      [id, words, rev],
+    );
+    if (!rows[0]?.done) return { ok: !!rows[0] };
+  }
   if (!words) return failed(id, { error: "Didn't catch anything. Try again a little closer to the mic." });
   const { rows } = await db.query<{ user_id: string; context: Context }>(
     `update ai_job set transcript = $2, audio = null, status = 'thinking', lease_until = null
@@ -304,6 +342,10 @@ export async function transcribed(id: string, b: Record<string, unknown>) {
   );
   const j = rows[0];
   if (!j) return { ok: false };
+  if (j.context.wordsOnly) {
+    await db.query(`update ai_job set status = 'ready' where id = $1`, [id]);
+    return { ok: true };
+  }
   later(async () => {
     try {
       const result = await think(j.user_id, words, j.context);

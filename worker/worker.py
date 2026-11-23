@@ -1,7 +1,8 @@
 """todone's transcriber: turns Ask todone recordings into words, on a machine you run (an Apple Silicon Mac).
 
 It only connects out: it asks the server for the next recording, transcribes it with Whisper (MLX), sends the words
-back, and deletes its copy. The server never connects to it. Settings come from the environment:
+back, and deletes its copy. A live recording (someone still talking) comes back again each time a new 2-second piece
+arrives, and all of it so far is transcribed again, so the words show as they speak. The server never connects to it. Settings come from the environment:
 
   TODONE_URL       the web app's address, e.g. https://todone.today
   AI_WORKER_TOKEN  the same long random token the server has
@@ -57,12 +58,13 @@ def main():
             continue
         if not job:
             idle = 2
-            time.sleep(2)
+            time.sleep(1)  # live speech waits on this: words so far show about a second or two behind
             continue
         started = time.time()
         try:
             text, lang = transcribe(job)
-            call(f"/jobs/{job['id']}", {"transcript": text, "language": lang})
+            # rev: which piece of a live recording these words cover (the server knows if it was the last).
+            call(f"/jobs/{job['id']}", {"transcript": text, "language": lang, "rev": job.get("rev", 0)})
             print(f"{job['id']}: {lang}, {len(text)} chars in {time.time() - started:.1f}s", flush=True)
         except Exception as e:  # one bad recording mustn't stop the worker
             print(f"{job['id']}: failed: {e}", file=sys.stderr, flush=True)

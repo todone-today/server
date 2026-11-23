@@ -245,6 +245,11 @@ create table if not exists ai_job (
   created_at timestamptz not null default now()
 );
 create index if not exists ai_job_waiting on ai_job (created_at) where audio is not null;
+-- Live speech: the recording grows a piece at a time (rev counts them; heard_rev is the latest one turned into words),
+-- and "final" says the last piece is in.
+alter table ai_job add column if not exists rev integer not null default 0;
+alter table ai_job add column if not exists heard_rev integer not null default 0;
+alter table ai_job add column if not exists final boolean not null default true;
 -- Ask todone a month per person: requests, tokens, and the credits they cost (the plan limit).
 create table if not exists ai_usage (
   user_id text not null references "user"(id) on delete cascade,
