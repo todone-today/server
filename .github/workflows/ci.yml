@@ -48,7 +48,8 @@ jobs:
           git fetch -q origin && git checkout -q main && git merge --ff-only -q "$GIT_SHA"
           docker compose build server
           docker compose up -d --no-deps server caddy
-          docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+          # A Caddy that was just recreated is still starting: wait for it to take the (possibly changed) config.
+          for i in $(seq 1 15); do docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null && break; sleep 2; done
           for i in $(seq 1 30); do docker exec todone-server-1 wget -qO- http://localhost:4000/api/health >/dev/null 2>&1 && exit 0; sleep 2; done
           docker logs --tail 30 todone-server-1; exit 1
           DEPLOY

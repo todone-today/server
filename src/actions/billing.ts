@@ -309,6 +309,11 @@ export async function confirm(b: Record<string, unknown>) {
   return status();
 }
 
+// Where a settled purchase's paid time ends. Founding counts 36 months from its first settlement only, so
+// re-sending the same Checkout confirmation (or a repeated webhook) can't push it further.
+export const settledUntil = (s: Pick<Sub, "term" | "paid_until" | "start_at"> & { upfront: number }, now: number) =>
+  s.term === "founding" ? (s.paid_until ? +s.paid_until : addMonths(now, FOUNDING.months)) : s.upfront ? +s.start_at! : null;
+
 type Pay = { id: string; amount: number; status: string; email?: string };
 // A purchase was paid for: it counts from now, the old one stops renewing, and the payment gets a receipt.
 async function settle(id: string, paymentId: string | null) {
@@ -322,7 +327,7 @@ async function settle(id: string, paymentId: string | null) {
     if (pay.status !== "captured") throw bad("That payment hasn't gone through yet.");
     await record(pay, s.user_id, id, label(s));
   }
-  const until = s.term === "founding" ? addMonths(Date.now(), FOUNDING.months) : s.upfront ? +s.start_at! : null;
+  const until = settledUntil(s, Date.now());
   await db.query(
     `update billing_sub set status = case when status = 'created' then 'authenticated' else status end,
        paid_until = greatest(paid_until, to_timestamp($2::float8 / 1000)) where id = $1`,

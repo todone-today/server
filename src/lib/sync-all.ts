@@ -31,6 +31,14 @@ export async function syncWorkspace(workspace: string): Promise<string> {
   };
   if (w.notionToken && w.notionDatabase)
     await run("Notion", () => runSync(workspace, "notion", NOTION, notionAdapter(w.notionToken!, w.notionDatabase!, tz)));
+  // A team's calendar sync runs on the Google account of whoever connected it; once they've left or been removed it
+  // stops (and is disconnected), so the team's tasks don't keep flowing into an ex-member's calendar.
+  if (w.googleUserId && workspace.startsWith("o:") && !(await stillMember(workspace.slice(2), w.googleUserId))) {
+    await db.query(`update workspace set "googleUserId" = null, "googleCalendarId" = null, "googleSyncToken" = null where id = $1`, [
+      workspace,
+    ]);
+    w.googleCalendarId = null;
+  }
   if (w.googleUserId && w.googleCalendarId)
     await run("Google Calendar", () =>
       runSync(
@@ -57,3 +65,6 @@ export async function autoSync(workspace: string) {
   );
   if (r.rowCount) await syncWorkspace(workspace);
 }
+
+const stillMember = (org: string, user: string) =>
+  db.query(`select 1 from member where "organizationId" = $1 and "userId" = $2`, [org, user]).then((r) => !!r.rowCount);

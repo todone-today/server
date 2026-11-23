@@ -69,3 +69,11 @@ test("checkout and webhook signatures", () => {
   assert.ok(!webhookOk('{"a":2}', h("hook", '{"a":1}')));
   assert.ok(!signs("k", "x", "short"));
 });
+
+test("a Founding purchase ends 36 months after its first settlement; confirming it again doesn't move it", async () => {
+  const { settledUntil } = await import("../actions/billing.ts");
+  const first = settledUntil({ term: "founding", paid_until: null, start_at: null, upfront: 1 }, NOW)!;
+  const later = settledUntil({ term: "founding", paid_until: new Date(first), start_at: null, upfront: 1 }, NOW + 400 * DAY);
+  assert.equal(later, first);
+  assert.ok(first > NOW + 1000 * DAY);
+});
