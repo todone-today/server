@@ -1,5 +1,5 @@
-# The API's public address. Requests must carry the web app's secret header; anything else gets a 403, so the
-# X-Forwarded-For the web app's host (Vercel) sets is the real client and can be trusted for rate limits.
+# The API's public address, for the website (todone.today on Vercel). Requests must carry the website's secret
+# header; anything else gets a 403, so the X-Forwarded-For Vercel sets is the real client, trusted for rate limits.
 {
 	servers {
 		trusted_proxies static 0.0.0.0/0 ::/0
@@ -18,4 +18,83 @@
 		reverse_proxy server:4000
 	}
 	respond 403
+}
+
+# The app (app.todone.today): its static files (the clients repo's TARGET=app build, copied into ./app-static by its
+# CI) and, at the same address, this API. One address for both keeps the session cookie first-party (Safari caps
+# cookies a site's API sets from another server to 7 days) and needs no CORS. People connect here directly, so the
+# address Caddy sees is theirs: it replaces any X-Forwarded-For they send (the trusted_proxies above is for the
+# website's calls to the API address only).
+{$APP_DOMAIN:app.localhost} {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+	encode zstd gzip
+
+	handle /api/* {
+		request_header -X-Todone-Proxy
+		reverse_proxy server:4000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			flush_interval -1
+		}
+	}
+
+	# PostHog (cookieless usage counts) through this address, so tracker blockers don't hide whole visits. Another
+	# company: the session cookie never goes there.
+	handle /ingest/static/* {
+		uri strip_prefix /ingest
+		reverse_proxy https://us-assets.i.posthog.com {
+			header_up Host us-assets.i.posthog.com
+			header_up -Cookie
+			header_up -Authorization
+		}
+	}
+	handle /ingest/* {
+		uri strip_prefix /ingest
+		reverse_proxy https://us.i.posthog.com {
+			header_up Host us.i.posthog.com
+			header_up -Cookie
+			header_up -Authorization
+		}
+	}
+
+	# The app isn't for search engines (the website is).
+	handle /robots.txt {
+		respond "User-agent: *
+Disallow: /
+"
+	}
+
+	handle {
+		root * /srv/app
+		# Build files carry their content's hash in the name: kept forever. Pages and the service worker: always
+		# checked, so a new version shows on the next open.
+		@fresh not path /_next/static/*
+		header @fresh Cache-Control "no-cache"
+		@hashed path /_next/static/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header /manifest.webmanifest Content-Type application/manifest+json
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+	handle_errors 404 {
+		root * /srv/app
+		rewrite * /404.html
+		file_server
+	}
+
+	# Browser hardening: no framing, no MIME sniffing, HTTPS only, a tight referrer, no camera or location, and the
+	# microphone for Ask todone's voice on this address only.
+	header {
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=()"
+		-Server
+	}
 }

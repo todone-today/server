@@ -122,10 +122,13 @@ services:
       - "443:443"
     environment:
       API_DOMAIN: ${API_DOMAIN:-}
+      APP_DOMAIN: ${APP_DOMAIN:-}
       PROXY_SECRET: ${PROXY_SECRET:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy:/data
+      # The app's static files (app.todone.today), copied here by the clients repo's CI.
+      - ./app-static:/srv/app:ro
     depends_on:
       - server
 
