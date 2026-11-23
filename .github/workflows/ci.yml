@@ -19,11 +19,13 @@ jobs:
       - run: npm test
 
   deploy:
-    # main -> production at todone-server.vercel.app (the API behind todone.today); its build migrates the database.
+    # main -> production. On Fly.io (todone-api, behind app.todone.today) once FLY_API_TOKEN is set: it migrates the
+    # database as it starts. Until then, Vercel (todone-server.vercel.app), whose build migrates the database.
     if: github.event_name == 'push'
     needs: [check]
     runs-on: ubuntu-latest
     env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: team_NNPaLOvnhZx4WAk5fFqcBoW8
       VERCEL_PROJECT_ID: prj_CK3qKEWLmAayjPeqWD3qMoxTQq65
@@ -32,7 +34,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Migrate and deploy
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: env.FLY_API_TOKEN != ''
+      - name: Deploy to Fly
+        if: env.FLY_API_TOKEN != ''
+        run: flyctl deploy --remote-only
+      - name: Migrate and deploy (Vercel)
+        if: env.FLY_API_TOKEN == ''
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "::warning::VERCEL_TOKEN secret is not set; skipping deploy"

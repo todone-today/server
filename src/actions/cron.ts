@@ -10,8 +10,14 @@ export async function cron(req: Request) {
   const got = Buffer.from(req.headers.get("authorization") ?? "");
   if (!process.env.CRON_SECRET || got.length !== want.length || !timingSafeEqual(got, want))
     return new Response("Unauthorized", { status: 401 });
+  return Response.json({ purged: await housekeep() });
+}
+
+// Sweeps what has expired: old rate-limit counts, unused uploads, finished AI jobs, and accounts never confirmed.
+// The long-running server (main.ts) runs it itself every 10 minutes; serverless hosts call /api/cron/notify.
+export async function housekeep() {
   await pruneRateLimits();
   await pruneFiles();
   await pruneAi();
-  return Response.json({ purged: await purgeUnverified() });
+  return purgeUnverified();
 }

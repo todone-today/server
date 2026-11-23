@@ -23,6 +23,7 @@ import { billingOn } from "./lib/plans.ts";
 import { hasFiles } from "./lib/r2.ts";
 import { cron } from "./actions/cron.ts";
 import { feed } from "./actions/feed.ts";
+import { tunnel } from "./actions/monitoring.ts";
 import { sharedView } from "./actions/shared.ts";
 import { syncedLists } from "./actions/sync-all-lists.ts";
 import { stats, statsAllowed } from "./actions/stats.ts";
@@ -109,6 +110,8 @@ app.get("/api/sync/:token", (c) => syncedLists(c.req.param("token")));
 app.get("/api/sync/:token/:list", (c) => getList(c.req.param("token"), c.req.param("list")));
 app.put("/api/sync/:token/:list", (c) => putList(c.req.raw, c.req.param("token"), c.req.param("list")));
 app.get("/api/cron/notify", (c) => cron(c.req.raw));
+// The web app's error reports, passed on to Sentry (actions/monitoring.ts).
+app.post("/api/monitoring", async (c) => tunnel(await c.req.text()));
 // Razorpay's webhooks: signed with the webhook secret over the raw body, so no session or CSRF check.
 app.post("/api/billing/webhook", async (c) =>
   c.json(await billing.webhook(await c.req.text(), c.req.header("x-razorpay-signature"), c.req.header("x-razorpay-event-id"))),
