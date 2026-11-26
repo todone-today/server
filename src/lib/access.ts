@@ -1,5 +1,6 @@
 import { ApiError, later, requestHeaders } from "../context.ts";
 import { auth } from "./auth.ts";
+import { connectorAuth } from "../actions/connectors.ts";
 import { db } from "./db.ts";
 import type { List } from "@todone/sdk/tasks";
 
@@ -18,11 +19,14 @@ function seen(user: string) {
 
 // The signed-in user and the workspace they're in: "u:<user>" for personal lists, "o:<org>" for a team.
 export async function who() {
-  const s = await auth.api.getSession({ headers: requestHeaders() });
-  if (!s) throw new ApiError(401, "Signed out");
-  const user = s.user.id;
+  // An AI connection (actions/connectors.ts) names its workspace in a header; the browser's is the session's.
+  const conn = connectorAuth.getStore();
+  const s = conn ? null : await auth.api.getSession({ headers: requestHeaders() });
+  if (!conn && !s) throw new ApiError(401, "Signed out");
+  const user = conn ? conn.user : s!.user.id;
   seen(user);
-  const org = s.session.activeOrganizationId ?? null;
+  const asked = conn ? requestHeaders().get("x-todone-workspace") : null;
+  const org = conn ? (asked && asked !== "personal" ? asked : null) : (s!.session.activeOrganizationId ?? null);
   let role = "owner";
   if (org) {
     const m = await db.query<{ role: string }>(`select role from member where "userId" = $1 and "organizationId" = $2`, [

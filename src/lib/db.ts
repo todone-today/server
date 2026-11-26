@@ -295,4 +295,16 @@ create table if not exists referral (
   activated_at timestamptz
 );
 create index if not exists referral_inviter on referral (inviter);
+-- An AI app on someone's computer connected to their account (actions/connectors.ts): it signs in with a token
+-- (only its hash is kept) and opens their lists with the account key wrapped to a secret the server never sees.
+create table if not exists connector (
+  id text primary key,
+  user_id text not null references "user"(id) on delete cascade,
+  name text not null,
+  token_hash text not null unique,
+  wrapped_key text not null,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz
+);
+create index if not exists connector_user on connector (user_id);
 `;

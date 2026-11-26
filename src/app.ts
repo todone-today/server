@@ -18,6 +18,7 @@ import * as goalShares from "./actions/goalShares.ts";
 import * as push from "./actions/push.ts";
 import * as billing from "./actions/billing.ts";
 import * as ai from "./actions/ai.ts";
+import * as connectors from "./actions/connectors.ts";
 import { hasAi } from "./lib/gemini.ts";
 import { billingOn } from "./lib/plans.ts";
 import { hasFiles } from "./lib/r2.ts";
@@ -160,6 +161,23 @@ const origins = [process.env.BETTER_AUTH_URL, ...(process.env.BETTER_AUTH_TRUSTE
   .map((u) => new URL(u.trim()).origin);
 const me = new Hono();
 me.use("*", csrf(origins.length ? { origin: origins } : undefined));
+// An AI app on someone's computer signs in with its connection token instead of a session, and may only touch
+// lists (actions/connectors.ts).
+me.use("*", async (c, next) => {
+  const h = c.req.header("authorization");
+  if (!h?.startsWith("Bearer ")) return next();
+  const token = h.slice(7).trim();
+  if (!connectors.TOKEN.test(token)) throw new ApiError(401, "This connection doesn't work. Make a new one in todone's Account.");
+  if (!connectors.connectorMay(c.req.method, c.req.path)) throw new ApiError(403, "An AI connection can't do that.");
+  const conn = await connectors.byToken(token);
+  if (!conn) throw new ApiError(401, "This connection was removed. Make a new one in todone's Account.");
+  return connectors.connectorAuth.run(conn, next);
+});
+me.get("/connectors", async (c) => c.json(await connectors.mine()));
+me.post("/connectors", async (c) => c.json(await connectors.create(await body(c))));
+me.delete("/connectors/:id", async (c) => c.json(await connectors.remove(c.req.param("id"))));
+me.get("/connectors/self", async (c) => c.json(await connectors.self()));
+me.get("/workspaces", async (c) => c.json(await connectors.workspaces()));
 
 me.get("/lists", async (c) => c.json(await lists.fetchLists()));
 me.post("/lists", async (c) => {

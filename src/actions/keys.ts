@@ -1,5 +1,6 @@
 // Zero knowledge: the server stores keys it can't open and checks a hash it can't reverse. The browser derives
 // everything from the password (see @todone/sdk/crypto); here we only store, hand back, and swap atomically.
+import { connectorAuth } from "./connectors.ts";
 import { createHmac } from "node:crypto";
 import { ApiError, bad, requestHeaders } from "../context.ts";
 import { auth } from "../lib/auth.ts";
@@ -117,7 +118,9 @@ export async function prelogin(email: unknown) {
 
 // The signed-in person's wrapped keys and their teams' wrapped team keys.
 export async function myKeys() {
-  const s = await session();
+  // An AI connection fetches these too, to open the lists on its own computer (actions/connectors.ts).
+  const conn = connectorAuth.getStore();
+  const s = conn ? { user: { id: conn.user } } : await session();
   const { rows } = await db.query<Keys>(
     `select "kdfSalt", "kdfIter", "wrappedKey", "recoveryWrappedKey", "encryptedRecovery", "publicKey", "wrappedPrivateKey"
      from "user" where id = $1`,
