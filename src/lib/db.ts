@@ -310,4 +310,6 @@ create index if not exists connector_user on connector (user_id);
 -- Since connectors read only readable lists, they hold no key: earlier connections' wrapped keys are dropped.
 alter table connector alter column wrapped_key drop not null;
 update connector set wrapped_key = null where wrapped_key is not null;
+-- One code per person, kept so Account can show it again (actions/connectors.ts).
+alter table connector add column if not exists token text;
 `;

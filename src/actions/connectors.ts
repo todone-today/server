@@ -1,13 +1,13 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID } from "node:crypto";
-import { ApiError, bad, later } from "../context.ts";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { ApiError, later } from "../context.ts";
 import { who } from "../lib/access.ts";
 import { db } from "../lib/db.ts";
 
-// AI apps on someone's own computer (the todone-mcp connector), connected from Account. The browser makes the
-// connection code: a token, which signs the connector in (only its hash is kept here), and a secret, which never
-// reaches the server and unwraps the account key the browser left here wrapped to it. So the connector opens the
-// lists on that computer and they stay end-to-end encrypted.
+// AI apps on someone's own computer (the todone-mcp connector), connected from Account. Each person has one code
+// for all their AI apps, shown again whenever they ask, and replaced when they ask for a new one (the old one then
+// stops working). It's kept readable so it can be shown again: it opens only lists made readable, which this server
+// can read anyway. Connections made before (one per app, kept as a hash only) keep working until a new code.
 
 // The connector making this request, once its token checked out (app.ts).
 export const connectorAuth = new AsyncLocalStorage<{ id: string; user: string }>();
@@ -27,49 +27,48 @@ const ALLOWED: [string, RegExp][] = [
 ];
 export const connectorMay = (method: string, path: string) => ALLOWED.some(([m, p]) => m === method && p.test(path));
 
-const MAX = 10;
-type Row = { id: string; name: string; created_at: Date; last_used_at: Date | null };
-const shape = (r: Row) => ({ id: r.id, name: r.name, created: +r.created_at, used: r.last_used_at ? +r.last_used_at : null });
-
-export async function create(b: Record<string, unknown>) {
-  const { user } = await who();
-  const name = typeof b.name === "string" ? b.name.trim() : "";
-  if (!name || name.length > 60) throw bad("Give it a name of up to 60 characters.");
-  if (typeof b.tokenHash !== "string" || !/^[0-9a-f]{64}$/.test(b.tokenHash)) throw bad("Invalid connection");
-  const n = await db.query(`select 1 from connector where user_id = $1`, [user]);
-  if ((n.rowCount ?? 0) >= MAX) throw bad(`You can have ${MAX} connections. Remove one you don't use first.`);
-  const { rows } = await db.query<Row>(
-    `insert into connector (id, user_id, name, token_hash) values ($1, $2, $3, $4)
-     returning id, name, created_at, last_used_at`,
-    [randomUUID(), user, name, b.tokenHash],
-  );
-  return shape(rows[0]);
+const fresh = () => `tdn_${randomBytes(32).toString("base64url")}`;
+async function insert(user: string) {
+  const token = fresh();
+  await db.query(`insert into connector (id, user_id, name, token_hash, token) values ($1, $2, 'AI apps', $3, $4)`, [
+    randomUUID(),
+    user,
+    hashToken(token),
+    token,
+  ]);
+  return token;
 }
+const lastUsed = async (user: string) => {
+  const { rows } = await db.query<{ used: Date | null }>(`select max(last_used_at) as used from connector where user_id = $1`, [user]);
+  return rows[0]?.used ? +rows[0].used : null;
+};
 
-export async function mine() {
+// The person's code (made the first time), and when an AI app last used todone.
+export async function code() {
   const { user } = await who();
-  const { rows } = await db.query<Row>(
-    `select id, name, created_at, last_used_at from connector where user_id = $1 order by created_at`,
+  const { rows } = await db.query<{ token: string }>(
+    `select token from connector where user_id = $1 and token is not null order by created_at desc limit 1`,
     [user],
   );
-  return rows.map(shape);
+  return { code: rows[0]?.token ?? (await insert(user)), used: await lastUsed(user) };
 }
 
-export async function remove(id: string) {
+// A new code: every earlier one stops working.
+export async function newCode() {
   const { user } = await who();
-  await db.query(`delete from connector where id = $1 and user_id = $2`, [id, user]);
-  return { ok: true };
+  await db.query(`delete from connector where user_id = $1`, [user]);
+  return { code: await insert(user), used: null };
 }
 
 // The connector asking who it is (the name it was given and whose account).
 export async function self() {
   const c = connectorAuth.getStore();
-  if (!c) throw new ApiError(403, "Only a connection can ask this.");
+  if (!c) throw new ApiError(403, "Only an AI app can ask this.");
   const { rows } = await db.query<{ name: string }>(
     `select name from connector where id = $1`,
     [c.id],
   );
-  if (!rows[0]) throw new ApiError(401, "This connection was removed.");
+  if (!rows[0]) throw new ApiError(401, "This todone code was replaced with a new one.");
   return { name: rows[0].name, user: c.user };
 }
 

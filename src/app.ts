@@ -167,15 +167,14 @@ me.use("*", async (c, next) => {
   const h = c.req.header("authorization");
   if (!h?.startsWith("Bearer ")) return next();
   const token = h.slice(7).trim();
-  if (!connectors.TOKEN.test(token)) throw new ApiError(401, "This connection doesn't work. Make a new one in todone's Account.");
-  if (!connectors.connectorMay(c.req.method, c.req.path)) throw new ApiError(403, "An AI connection can't do that.");
+  if (!connectors.TOKEN.test(token)) throw new ApiError(401, "This todone code doesn't look right. Copy it again from todone: Account → Connect an AI.");
+  if (!connectors.connectorMay(c.req.method, c.req.path)) throw new ApiError(403, "An AI app can't do that.");
   const conn = await connectors.byToken(token);
-  if (!conn) throw new ApiError(401, "This connection was removed. Make a new one in todone's Account.");
+  if (!conn) throw new ApiError(401, "This todone code was replaced with a new one. Copy the new one from todone: Account → Connect an AI.");
   return connectors.connectorAuth.run(conn, next);
 });
-me.get("/connectors", async (c) => c.json(await connectors.mine()));
-me.post("/connectors", async (c) => c.json(await connectors.create(await body(c))));
-me.delete("/connectors/:id", async (c) => c.json(await connectors.remove(c.req.param("id"))));
+me.get("/connectors/code", async (c) => c.json(await connectors.code()));
+me.post("/connectors/code", async (c) => c.json(await connectors.newCode()));
 me.get("/connectors/self", async (c) => c.json(await connectors.self()));
 me.get("/workspaces", async (c) => c.json(await connectors.workspaces()));
 

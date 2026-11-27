@@ -19,9 +19,8 @@ test("a connection can't change the account, billing, sharing or other connectio
     ["GET", "/api/keys"], // it holds no key: encrypted lists stay closed to it
     ["POST", "/api/keys/password"],
     ["POST", "/api/keys/recovery-key"],
-    ["GET", "/api/connectors"],
-    ["POST", "/api/connectors"],
-    ["DELETE", "/api/connectors/x"],
+    ["GET", "/api/connectors/code"], // a connection can't read or replace the code
+    ["POST", "/api/connectors/code"],
     ["PUT", "/api/lists/order"],
     ["GET", "/api/export"],
     ["POST", "/api/billing/cancel"],
