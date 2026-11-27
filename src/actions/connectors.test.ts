@@ -2,13 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { TOKEN, connectorMay, hashToken } from "./connectors.ts";
 
-test("a connection may read and save lists, and fetch keys and workspaces", () => {
+test("a connection may read and save lists, and see its workspaces", () => {
   for (const [m, p] of [
     ["GET", "/api/lists"],
     ["POST", "/api/lists"],
     ["PUT", "/api/lists/abc123de"],
     ["DELETE", "/api/lists/abc123de"],
-    ["GET", "/api/keys"],
     ["GET", "/api/connectors/self"],
     ["GET", "/api/workspaces"],
   ])
@@ -17,6 +16,7 @@ test("a connection may read and save lists, and fetch keys and workspaces", () =
 
 test("a connection can't change the account, billing, sharing or other connections", () => {
   for (const [m, p] of [
+    ["GET", "/api/keys"], // it holds no key: encrypted lists stay closed to it
     ["POST", "/api/keys/password"],
     ["POST", "/api/keys/recovery-key"],
     ["GET", "/api/connectors"],

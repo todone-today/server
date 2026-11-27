@@ -307,4 +307,7 @@ create table if not exists connector (
   last_used_at timestamptz
 );
 create index if not exists connector_user on connector (user_id);
+-- Since connectors read only readable lists, they hold no key: earlier connections' wrapped keys are dropped.
+alter table connector alter column wrapped_key drop not null;
+update connector set wrapped_key = null where wrapped_key is not null;
 `;

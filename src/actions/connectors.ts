@@ -15,21 +15,19 @@ export const connectorAuth = new AsyncLocalStorage<{ id: string; user: string }>
 export const TOKEN = /^tdn_[A-Za-z0-9_-]{32,64}$/;
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-// What a connector may do: read and save lists, and fetch the keys and workspaces to open them. Nothing that
-// changes the account (keys, password, billing, sharing, other connections).
+// What a connector may do: read and save lists, and see its workspaces. It holds no key, so it can only read and
+// write readable lists. Nothing that changes the account (keys, password, billing, sharing, other connections).
 const ALLOWED: [string, RegExp][] = [
   ["GET", /^\/api\/lists$/],
   ["POST", /^\/api\/lists$/],
   ["PUT", /^\/api\/lists\/(?!order$)[\w-]+$/],
   ["DELETE", /^\/api\/lists\/[\w-]+$/],
-  ["GET", /^\/api\/keys$/],
   ["GET", /^\/api\/connectors\/self$/],
   ["GET", /^\/api\/workspaces$/],
 ];
 export const connectorMay = (method: string, path: string) => ALLOWED.some(([m, p]) => m === method && p.test(path));
 
 const MAX = 10;
-const BLOB = /^v1\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/;
 type Row = { id: string; name: string; created_at: Date; last_used_at: Date | null };
 const shape = (r: Row) => ({ id: r.id, name: r.name, created: +r.created_at, used: r.last_used_at ? +r.last_used_at : null });
 
@@ -38,13 +36,12 @@ export async function create(b: Record<string, unknown>) {
   const name = typeof b.name === "string" ? b.name.trim() : "";
   if (!name || name.length > 60) throw bad("Give it a name of up to 60 characters.");
   if (typeof b.tokenHash !== "string" || !/^[0-9a-f]{64}$/.test(b.tokenHash)) throw bad("Invalid connection");
-  if (typeof b.wrappedKey !== "string" || b.wrappedKey.length > 200 || !BLOB.test(b.wrappedKey)) throw bad("Invalid connection");
   const n = await db.query(`select 1 from connector where user_id = $1`, [user]);
   if ((n.rowCount ?? 0) >= MAX) throw bad(`You can have ${MAX} connections. Remove one you don't use first.`);
   const { rows } = await db.query<Row>(
-    `insert into connector (id, user_id, name, token_hash, wrapped_key) values ($1, $2, $3, $4, $5)
+    `insert into connector (id, user_id, name, token_hash) values ($1, $2, $3, $4)
      returning id, name, created_at, last_used_at`,
-    [randomUUID(), user, name, b.tokenHash, b.wrappedKey],
+    [randomUUID(), user, name, b.tokenHash],
   );
   return shape(rows[0]);
 }
@@ -64,16 +61,16 @@ export async function remove(id: string) {
   return { ok: true };
 }
 
-// The connector asking for its own wrapped key (and the name it was given).
+// The connector asking who it is (the name it was given and whose account).
 export async function self() {
   const c = connectorAuth.getStore();
   if (!c) throw new ApiError(403, "Only a connection can ask this.");
-  const { rows } = await db.query<{ name: string; wrapped_key: string }>(
-    `select name, wrapped_key from connector where id = $1`,
+  const { rows } = await db.query<{ name: string }>(
+    `select name from connector where id = $1`,
     [c.id],
   );
   if (!rows[0]) throw new ApiError(401, "This connection was removed.");
-  return { name: rows[0].name, wrappedKey: rows[0].wrapped_key, user: c.user };
+  return { name: rows[0].name, user: c.user };
 }
 
 // Who a token belongs to (null: unknown or removed). Notes when it was last used, at most once a minute.

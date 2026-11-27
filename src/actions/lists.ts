@@ -5,6 +5,7 @@ import { notifyDiscord } from "../lib/notify.ts";
 import { mayAddList } from "./billing.ts";
 import { autoSync } from "../lib/sync-all.ts";
 import { type List, type Task, validIcon, validName, validTasks } from "@todone/sdk/tasks";
+import { validGoalItems } from "@todone/sdk/goals";
 
 type Row = {
   id: string;
@@ -34,12 +35,14 @@ const toList = (r: Row): Stored => ({
 const COLS = `id, name, tasks, version, "updatedAt", kind, position, data, icon`;
 // Ciphertext isn't parsed, only shaped and capped (the request body limit is 2 MB).
 const BLOB = /^v1\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+$/;
-function contents(name: unknown, tasks: unknown, data: unknown, icon?: unknown) {
+// `kind` says what a readable list holds: goals and rewards (sdk goals.ts), or tasks.
+function contents(name: unknown, tasks: unknown, data: unknown, icon?: unknown, kind?: unknown) {
   if (data !== undefined && data !== null) {
     if (typeof data !== "string" || data.length > 1_900_000 || !BLOB.test(data)) throw bad("Invalid list");
     return { name: "", tasks: "[]", data, icon: null };
   }
-  if (typeof name !== "string" || !validName(name) || !validTasks(tasks) || !validIcon(icon)) throw bad("Invalid list");
+  const valid = kind === "goals" ? validGoalItems(tasks) : validTasks(tasks);
+  if (typeof name !== "string" || !validName(name) || !valid || !validIcon(icon)) throw bad("Invalid list");
   return { name: name.trim(), tasks: JSON.stringify(tasks), data: null, icon: (icon as string | undefined) ?? null };
 }
 // The lists of the active workspace: the user's own, or the active organization's.
@@ -62,9 +65,7 @@ export async function createList(
 ): Promise<Stored> {
   const { user, org } = await who();
   if (!/^[\w-]{8,40}$/.test(id) || !["list", "ideas", "bin", "goals"].includes(kind as string)) throw bad("Invalid list");
-  // Goals, rewards and XP are only ever stored encrypted.
-  if (kind === "goals" && !data) throw bad("Invalid list");
-  const c = contents(name, tasks, data, icon);
+  const c = contents(name, tasks, data, icon, kind);
   await mayAddList(user, org, kind);
   const { rows } = await db.query<Row>(
     `insert into list (id, "userId", "organizationId", name, tasks, kind, data, icon) values ($1, $2, $3, $4, $5, $6, $7, $8) returning ${COLS}`,
@@ -84,12 +85,14 @@ export async function saveList(
   icon?: unknown,
 ): Promise<{ ok: boolean; list: Stored | null }> {
   const { user } = await who();
-  const c = contents(name, tasks, data, icon);
+  // A readable save is checked against what the list holds (goals or tasks); an encrypted one can't be.
+  const kind = data === undefined || data === null ? (await db.query<{ kind: string }>(`select kind from list where id = $2 and ${MINE}`, [user, id])).rows[0]?.kind : undefined;
+  const c = contents(name, tasks, data, icon, kind);
   // The CTE reads the row as it was before the update, for the team notification.
   const { rows } = await db.query<Row & { before: Task[]; workspace: string }>(
     `with old as (select tasks from list where id = $2)
      update list set name = $4, tasks = $5, data = $6, icon = $7, version = version + 1, "updatedAt" = now()
-     where id = $2 and version = $3 and ${MINE} and (kind <> 'goals' or $6::text is not null)
+     where id = $2 and version = $3 and ${MINE}
      returning ${COLS}, (select tasks from old) as before,
        coalesce('o:' || "organizationId", 'u:' || "userId") as workspace`,
     [user, id, version, c.name, c.tasks, c.data, c.icon],
@@ -97,7 +100,7 @@ export async function saveList(
   const r = rows[0];
   if (r) {
     // Discord hears about readable lists only; the server can't see inside encrypted ones.
-    if (!r.data) later(() => notifyDiscord(r.workspace, user, r.name, r.before, r.tasks));
+    if (!r.data && r.kind === "list") later(() => notifyDiscord(r.workspace, user, r.name, r.before, r.tasks));
     return { ok: true, list: toList(r) };
   }
   const now = await db.query<Row>(`select ${COLS} from list where id = $2 and ${MINE}`, [user, id]);
